@@ -27,6 +27,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg);
@@ -161,6 +162,9 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .result[aria-current="true"] { background: var(--accent-soft); border-color: rgb(240 0 140 / .45); }
 .result-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-meta { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-lib { border-left: 3px solid var(--ok); border-radius: 0 8px 8px 0; }
+.web-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.web-links .btn { text-decoration: none; }
 .result-snippet { font-size: 12px; color: var(--faint); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
@@ -312,11 +316,11 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
       </div>
       <div id="pane-search" role="tabpanel" aria-labelledby="tab-search">
         <form class="search-row" id="search-form">
-          <input type="search" id="q" placeholder="Título y/o artista" aria-label="Buscar canción" autocomplete="off">
+          <input type="search" id="q" placeholder="Título, artista o nº de himno" aria-label="Buscar canción" autocomplete="off">
           <button class="btn btn-primary" type="submit">Buscar</button>
         </form>
         <div class="results" id="results" aria-live="polite">
-          <div class="empty">Escribe el nombre de la canción.<br>Se busca en LRCLIB y Letras.com a la vez.</div>
+          <div class="empty">Escribe el título, el artista o el número de himno.<br>Se busca en tu FreeShow, LRCLIB y Letras.com a la vez.</div>
         </div>
       </div>
       <div id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" hidden>
@@ -891,19 +895,91 @@ async function runSearch(q) {
   const seq = ++searchSeq
   const box = $("#results")
   box.replaceChildren(h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("div", { class: "skeleton" }))
-  const [lr, le] = await Promise.allSettled([searchLrclib(q), searchLetras(q)])
+  const refreshLibrary = api.connected ? api.get("get_shows").then((s) => { if (s) state.shows = s }).catch(() => {}) : Promise.resolve()
+  // un número solo ("245", "himno 245") es un número de himno: buscar únicamente en la biblioteca
+  const onlyNumber = /^(?:himno\s*)?\d{1,3}$/.test(norm(q))
+  const none = Promise.resolve([])
+  const [lr, le] = await Promise.allSettled([onlyNumber ? none : searchLrclib(q), onlyNumber ? none : searchLetras(q), refreshLibrary])
   if (seq !== searchSeq) return
 
-  const groups = []
+  const libItems = api.connected ? searchLibrary(q) : null
   const lrItems = lr.status === "fulfilled" ? lr.value : null
   const leItems = le.status === "fulfilled" ? le.value : null
 
-  groups.push(resultGroup("Con letra lista · LRCLIB", lrItems, lr.reason))
-  groups.push(resultGroup("Letras.com", leItems, le.reason))
-  box.replaceChildren(...groups)
-  if (!(lrItems?.length) && !(leItems?.length)) {
-    box.append(h("div", { class: "callout" }, h("p", { text: "No encontramos esa canción." }), h("p", { class: "muted", text: "Prueba con menos palabras (solo el título) o usa «Pegar letra»." })))
+  const groups = [libraryGroup(libItems)]
+  if (!onlyNumber) {
+    groups.push(resultGroup("Con letra lista · LRCLIB", lrItems, lr.reason))
+    groups.push(resultGroup("Letras.com", leItems, le.reason))
   }
+  if (!(libItems?.length) && !(lrItems?.length) && !(leItems?.length)) {
+    groups.push(h("div", { class: "callout" }, h("p", { text: "No encontramos esa canción." }), h("p", { class: "muted", text: "Prueba con menos palabras (solo el título) o búscala en la web con los botones de abajo." })))
+  }
+  groups.push(webGroup(q))
+  box.replaceChildren(...groups)
+}
+
+/* ---------- Biblioteca de FreeShow ---------- */
+const LIB_STOP = new Set(["himno", "el", "la", "los", "las", "de", "del", "y", "a", "en", "es", "un", "una", "que", "al", "se", "lo"])
+
+/** Busca en la biblioteca de FreeShow por título o por número de himno ("245", "himno 245"). */
+function searchLibrary(q) {
+  const nq = norm(q)
+  const num = (nq.match(/^(?:himno\s*)?(\d{1,3})$/) || [])[1]
+  const tokens = nq.split(" ").filter((t) => t.length > 1 && !LIB_STOP.has(t))
+  const out = []
+  for (const [id, s] of Object.entries(state.shows || {})) {
+    if (!s?.name || s.category === "scripture") continue
+    const name = norm(s.name)
+    let score = 0
+    if (num) {
+      if (String(s.quickAccess?.number ?? "") === String(Number(num)) || name.startsWith(num.padStart(3, "0") + " ")) score = 3
+    } else if (tokens.length) {
+      const words = name.split(" ")
+      const hits = tokens.filter((t) => words.some((w) => w.startsWith(t))).length
+      if (hits === tokens.length) score = 2 + (name.includes(tokens.join(" ")) ? 0.5 : 0)
+      else if (tokens.length >= 3 && hits / tokens.length >= 0.6) score = 1
+    }
+    if (score) out.push({ id, title: s.name, category: s.category, score })
+  }
+  return out.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, "es")).slice(0, 8)
+}
+
+function categoryLabel(id) {
+  return state.categories.find((c) => c.id === id)?.name || { song: "Canciones", presentation: "Presentaciones" }[id] || (id ? "Otra categoría" : "Sin categoría")
+}
+
+function libraryGroup(items) {
+  const wrap = h("div", { class: "result-group" })
+  wrap.append(h("h3", {}, h("span", { text: "Ya en tu FreeShow" }), h("span", { text: items ? String(items.length) : "" })))
+  if (!items) { wrap.append(h("div", { class: "note faint", text: "Conecta FreeShow para buscar también en tu biblioteca." })); return wrap }
+  if (!items.length) { wrap.append(h("div", { class: "note faint", text: "No está en tu biblioteca." })); return wrap }
+  const list = h("div", { class: "result-list" })
+  for (const it of items) {
+    const meta = h("span", { class: "result-meta", text: `${categoryLabel(it.category)} · clic para abrirla en FreeShow` })
+    const btn = h("button", { class: "result result-lib", type: "button", title: "Abrir en FreeShow (no la proyecta)", onclick: () => {
+      try {
+        api.send("id_select_show", { id: it.id })
+        meta.textContent = `${categoryLabel(it.category)} · ✓ abierta en FreeShow`
+      } catch { meta.textContent = "Sin conexión con FreeShow" }
+    } }, h("span", { class: "result-title", text: it.title }), meta)
+    list.append(btn)
+  }
+  wrap.append(list)
+  return wrap
+}
+
+/* ---------- Búsqueda en la web (se abre en otra pestaña) ---------- */
+function webGroup(q) {
+  const links = [
+    ["Google", `https://www.google.com/search?q=${enc(q + " letra")}`],
+    ["Letras.com", `https://www.google.com/search?q=${enc(q + " site:letras.com")}`],
+    ["Musica.com", `https://www.google.com/search?q=${enc(q + " letra site:musica.com")}`],
+    ["Hymnary (himnos)", `https://hymnary.org/search?qu=${enc(q)}`]
+  ]
+  return h("div", { class: "result-group" },
+    h("h3", {}, h("span", { text: "Buscar en la web" })),
+    h("div", { class: "web-links" }, links.map(([label, href]) => h("a", { class: "btn btn-sm", href, target: "_blank", rel: "noopener", text: label + " ↗" }))),
+    h("p", { class: "note", text: "Se abre en otra pestaña: copia la letra y pégala en «Pegar letra»." }))
 }
 
 function resultGroup(title, items, err) {

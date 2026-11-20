@@ -18,7 +18,8 @@ La configuración se guarda solo en ese navegador.
 
 ## Uso
 
-1. **Buscar**: escribe el título, el artista o ambos.
+1. **Buscar**: escribe el título, el artista o el número de himno.
+   - Primero aparece lo que **ya está en tu FreeShow**, por título o por número («245», «himno 245»). Al hacer clic se abre en FreeShow sin proyectarse.
    - Los resultados de **LRCLIB** traen la letra completa.
    - Los de **Letras.com** se intentan completar solos. Si no se puede, aparece un botón para abrir la página: copias la letra y la pegas en «Pegar letra».
 2. **Ordenar**: cada estrofa es un bloque con su grupo.
@@ -38,7 +39,11 @@ Es un solo archivo (`index.html`) sin dependencias externas: el cliente socket.i
 
 ## Fuentes de letras
 
+- Tu biblioteca de FreeShow, por nombre y número de acceso rápido.
 - [LRCLIB](https://lrclib.net): base abierta, sin clave.
 - Buscador de [Letras.com](https://www.letras.com): solo títulos y enlaces.
+- **Buscar en la web**: botones que abren Google, Letras.com, Musica.com o Hymnary en otra pestaña, para copiar la letra y pegarla.
+
+Otros sitios de letras (Genius, Musixmatch, AZLyrics, Musica.com, Hymnary) no permiten que una página web lea su contenido. Integrarlos requeriría un servidor que copie sus páginas, que se rompe cuando cambian su diseño y va contra sus condiciones de uso. Lyrics.ovh sí lo permite, pero no tiene canciones cristianas en español.
 
 Respeta los derechos de autor y la licencia CCLI de tu iglesia al proyectar letras.
