@@ -372,6 +372,7 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
         </label>
         <button class="btn btn-primary btn-block" id="btn-create" type="button" disabled>Crear en FreeShow</button>
         <p class="note" id="create-hint"></p>
+        <button class="btn btn-sm" id="btn-retry" type="button" hidden>Reintentar conexión</button>
         <div class="log" id="log" aria-live="polite"></div>
         <details class="raw">
           <summary>Ver el texto que se enviará</summary>
@@ -688,9 +689,11 @@ class FreeShowAPI {
     this.disconnect()
     this.onStatus("connecting")
     // La API de FreeShow es socket.io (WebSocket) con CORS abierto.
+    // timeout amplio: Chrome puede tardar varios segundos en abrir la conexión a localhost
+    // (o esperar a que se pulse «Permitir» en el aviso de red local). socket.io reintenta solo.
     this.socket = io(`http://${host}:${apiPort}`, {
       transports: ["websocket"], auth: apiPass ? { password: apiPass } : {},
-      reconnectionDelay: 1500, reconnectionDelayMax: 5000, timeout: 4000
+      reconnectionDelay: 1500, reconnectionDelayMax: 5000, timeout: 20000
     })
     this.socket.on("connect", () => this.onStatus("ok"))
     this.socket.on("disconnect", () => this.onStatus("off"))
@@ -748,7 +751,7 @@ class FreeShowAPI {
 /** Lee categorías (y nombres traducidos) por el canal RemoteShow y se desconecta. */
 function readRemote({ host, remotePort, remotePass }) {
   return new Promise((resolve, reject) => {
-    const s = io(`http://${host}:${remotePort}`, { transports: ["websocket"], reconnection: false, timeout: 4000 })
+    const s = io(`http://${host}:${remotePort}`, { transports: ["websocket"], reconnection: false, timeout: 20000 })
     let strings = null
     let done = false
     const finish = (err, val) => {
@@ -758,7 +761,7 @@ function readRemote({ host, remotePort, remotePass }) {
       s.disconnect()
       err ? reject(err) : resolve(val)
     }
-    const timer = setTimeout(() => finish(new Error("timeout")), 7000)
+    const timer = setTimeout(() => finish(new Error("timeout")), 25000)
     s.on("connect", () => s.emit("REMOTE", { id: s.id, channel: "ACCESS", data: remotePass || "" }))
     s.on("connect_error", () => finish(new Error("offline")))
     s.on("REMOTE", (msg) => {
@@ -778,7 +781,7 @@ const state = {
   shows: {},          // biblioteca de FreeShow (id → {name, category})
   categories: [],     // [{id, name}]
   selectedResult: null,
-  lnaDenied: false,   // permiso de red local rechazado en el navegador
+  connIssue: null,    // por qué no conecta: "blocked" | "prompt" | "unreachable"
   metaSource: null   // de dónde vienen nombre/artista: "loaded" | "prefill" | "user"
 }
 
@@ -787,24 +790,52 @@ const api = new FreeShowAPI(setApiStatus)
 function setPill(el, st, text) { el.dataset.state = st; $(".pill-text", el).textContent = text }
 
 function setApiStatus(st) {
-  const txt = { ok: "FreeShow conectado", connecting: "Conectando…", off: "FreeShow: sin conexión", auth: "API: contraseña incorrecta" }[st] || st
+  const offText = { blocked: "Bloqueado por el navegador", prompt: "Acepta el aviso del navegador", unreachable: "FreeShow no responde" }[state.connIssue] || "FreeShow: sin conexión"
+  const txt = { ok: "FreeShow conectado", connecting: "Conectando…", off: offText, auth: "API: contraseña incorrecta" }[st] || st
   setPill($("#pill-api"), st, txt)
-  if (st === "ok") { state.lnaDenied = false; onApiConnected() }
-  if (st === "off") checkLocalNetworkPermission()
+  if (st === "ok") { state.connIssue = null; onApiConnected() }
   updateCreateButton()
 }
 
-/** Chrome/Edge piden permiso de "red local" para que una web hable con FreeShow. */
-async function checkLocalNetworkPermission() {
-  if (!navigator.permissions?.query) return
+/** Estado del permiso de "red local" (Chrome/Edge lo piden para hablar con FreeShow). */
+async function localNetworkPermission() {
+  if (!navigator.permissions?.query) return "unknown"
   for (const name of ["loopback-network", "local-network-access", "local-network"]) {
     try {
       const p = await navigator.permissions.query({ name })
-      state.lnaDenied = p.state === "denied"
-      p.onchange = () => { if (p.state === "granted") api.connect(settings) }
-      updateCreateButton()
-      return
+      p.onchange = () => { if (p.state === "granted") startConnection() }
+      return p.state
     } catch {}
+  }
+  return "unknown"
+}
+
+/**
+ * Comprueba que FreeShow responde. Un fetch() normal es lo que hace que Chrome
+ * muestre el aviso de red local; además permite distinguir "bloqueado" de "apagado".
+ */
+async function probe(host, port, ms = 25000) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), ms)
+  try {
+    await fetch(`http://${host}:${port}/socket.io/?EIO=4&transport=polling&t=${Date.now()}`, { signal: ctrl.signal, cache: "no-store" })
+    return "ok"
+  } catch (e) {
+    return e.name === "AbortError" ? "timeout" : "fail"
+  } finally { clearTimeout(t) }
+}
+
+let connectSeq = 0
+async function startConnection() {
+  const seq = ++connectSeq
+  state.connIssue = null
+  api.connect(settings) // socket.io sigue reintentando por su cuenta
+  const result = await probe(settings.host, settings.apiPort)
+  if (seq !== connectSeq || api.connected) return
+  if (result !== "ok") {
+    const perm = await localNetworkPermission()
+    state.connIssue = perm === "denied" ? "blocked" : perm === "prompt" ? "prompt" : "unreachable"
+    if (!api.connected) setApiStatus("off")
   }
 }
 
@@ -1042,8 +1073,17 @@ function updateCreateButton() {
   const hasContent = state.blocks.some((b) => blockSlides(b, settings).length)
   const hasName = !!$("#f-name").value.trim()
   btn.disabled = !(api.connected && hasContent && hasName)
-  hint.textContent = !api.connected && state.lnaDenied ? "El navegador está bloqueando la conexión con FreeShow. Haz clic en el icono a la izquierda de la dirección → Configuración del sitio → «Acceso a la red local» → Permitir, y recarga la página."
-    : !api.connected ? "Abre FreeShow y activa la API (botón ⚙ para ver cómo). Si el navegador pregunta por la red local, pulsa «Permitir»." : !hasContent ? "Primero elige o pega una letra." : !hasName ? "Escribe el nombre de la canción." : "Se guardará en la biblioteca de canciones. No se añade a ningún proyecto."
+  const isSafari = /^((?!chrome|chromium|edg|android).)*safari/i.test(navigator.userAgent)
+  $("#btn-retry").hidden = api.connected
+  hint.textContent = api.connected ? "" : state.connIssue === "blocked"
+    ? "El navegador está bloqueando la conexión con FreeShow. Haz clic en el icono a la izquierda de la dirección → Configuración del sitio → «Acceso a la red local» (o «Aplicaciones y servicios de este dispositivo») → Permitir, y pulsa Reintentar."
+    : state.connIssue === "prompt"
+    ? "El navegador debe estar mostrando un aviso arriba a la izquierda («…quiere acceder a otras apps y servicios de este dispositivo»). Pulsa «Permitir»."
+    : state.connIssue === "unreachable"
+    ? `No hay respuesta de FreeShow en ${settings.host}:${settings.apiPort}. Revisa que FreeShow esté abierto y que la API esté activada (Configuración → Conexiones → API).${isSafari ? " Safari puede bloquear esta conexión: prueba con Chrome o Edge." : ""}`
+    : "Conectando con FreeShow… Si el navegador pregunta por la red local o por apps de este dispositivo, pulsa «Permitir»."
+  if (!api.connected) return
+  hint.textContent = !hasContent ? "Primero elige o pega una letra." : !hasName ? "Escribe el nombre de la canción." : "Se guardará en la biblioteca de canciones. No se añade a ningún proyecto."
 }
 
 /* =========================================================================
@@ -1219,8 +1259,9 @@ sForm.addEventListener("submit", (e) => {
   settings.remotePass = f.remotePass.value
   saveSettings()
   openSettings(false)
-  api.connect(settings)
+  startConnection()
 })
+$("#btn-retry").addEventListener("click", startConnection)
 
 /* =========================================================================
    Inicio
@@ -1231,9 +1272,9 @@ renderPreview()
 if (typeof io !== "function") {
   setPill($("#pill-api"), "error", "Falta el cliente de conexión")
 } else {
-  api.connect(settings)
+  startConnection()
   // si FreeShow no responde al abrir, mostrar cómo conectarlo
-  setTimeout(() => { if (!api.connected) openSettings(true) }, 3500)
+  setTimeout(() => { if (!api.connected) openSettings(true) }, 8000)
 }
 </script>
 </body>
