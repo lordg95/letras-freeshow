@@ -778,7 +778,8 @@ const state = {
   shows: {},          // biblioteca de FreeShow (id → {name, category})
   categories: [],     // [{id, name}]
   selectedResult: null,
-  metaSource: null    // de dónde vienen nombre/artista: "loaded" | "prefill" | "user"
+  lnaDenied: false,   // permiso de red local rechazado en el navegador
+  metaSource: null   // de dónde vienen nombre/artista: "loaded" | "prefill" | "user"
 }
 
 const api = new FreeShowAPI(setApiStatus)
@@ -788,8 +789,23 @@ function setPill(el, st, text) { el.dataset.state = st; $(".pill-text", el).text
 function setApiStatus(st) {
   const txt = { ok: "FreeShow conectado", connecting: "Conectando…", off: "FreeShow: sin conexión", auth: "API: contraseña incorrecta" }[st] || st
   setPill($("#pill-api"), st, txt)
-  if (st === "ok") onApiConnected()
+  if (st === "ok") { state.lnaDenied = false; onApiConnected() }
+  if (st === "off") checkLocalNetworkPermission()
   updateCreateButton()
+}
+
+/** Chrome/Edge piden permiso de "red local" para que una web hable con FreeShow. */
+async function checkLocalNetworkPermission() {
+  if (!navigator.permissions?.query) return
+  for (const name of ["loopback-network", "local-network-access", "local-network"]) {
+    try {
+      const p = await navigator.permissions.query({ name })
+      state.lnaDenied = p.state === "denied"
+      p.onchange = () => { if (p.state === "granted") api.connect(settings) }
+      updateCreateButton()
+      return
+    } catch {}
+  }
 }
 
 async function onApiConnected() {
@@ -1026,7 +1042,8 @@ function updateCreateButton() {
   const hasContent = state.blocks.some((b) => blockSlides(b, settings).length)
   const hasName = !!$("#f-name").value.trim()
   btn.disabled = !(api.connected && hasContent && hasName)
-  hint.textContent = !api.connected ? "Abre FreeShow y activa la API (botón ⚙ para ver cómo)." : !hasContent ? "Primero elige o pega una letra." : !hasName ? "Escribe el nombre de la canción." : "Se guardará en la biblioteca de canciones. No se añade a ningún proyecto."
+  hint.textContent = !api.connected && state.lnaDenied ? "El navegador está bloqueando la conexión con FreeShow. Haz clic en el icono a la izquierda de la dirección → Configuración del sitio → «Acceso a la red local» → Permitir, y recarga la página."
+    : !api.connected ? "Abre FreeShow y activa la API (botón ⚙ para ver cómo). Si el navegador pregunta por la red local, pulsa «Permitir»." : !hasContent ? "Primero elige o pega una letra." : !hasName ? "Escribe el nombre de la canción." : "Se guardará en la biblioteca de canciones. No se añade a ningún proyecto."
 }
 
 /* =========================================================================

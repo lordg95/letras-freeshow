@@ -12,7 +12,7 @@ Funciona con cualquier computador que tenga FreeShow instalado, sin modificar Fr
 2. Activa **API**. Usa el puerto 5505 por defecto.
 3. Activa **RemoteShow** (puerto 5510) y anota su contraseña. Sirve para que la página muestre los nombres de tus categorías.
 4. Abre la página en **Chrome o Edge**, pulsa ⚙ y escribe la contraseña de RemoteShow.
-5. Si el navegador pide permiso para **acceder a dispositivos de la red local**, acéptalo. Es la forma en que la página habla con FreeShow en el mismo computador.
+5. Si el navegador pide permiso para **acceder a dispositivos de la red local**, pulsa **Permitir**. Es la forma en que la página habla con FreeShow en el mismo computador. Si lo rechazaste por error: icono a la izquierda de la dirección → *Configuración del sitio* → *Acceso a la red local* → *Permitir*, y recarga.
 
 La configuración se guarda solo en ese navegador.
 
