@@ -45,7 +45,10 @@ Es un solo archivo (`index.html`) sin dependencias externas: el cliente socket.i
 - **Buscar en la web**: botones que abren Google, Letras.com, Musica.com, Musixmatch o Hymnary en otra pestaña, para copiar la letra y pegarla.
 - **Musixmatch, pegando el enlace** (opcional). Busca la canción en musixmatch.com, copia la dirección y pégala en «Pegar letra → Enlace de Musixmatch», o directamente en el buscador.
   - La letra llega por el actor de Apify `omkar-cloud/musixmatch-scraper`.
-  - Necesita un token de Apify en ⚙. Se guarda solo en ese navegador y solo se envía a Apify.
+  - Se activa una vez por computador escribiendo la **Clave de Musixmatch** en ⚙.
+  - El token de Apify va incluido en la página **cifrado** (AES-256, clave derivada con PBKDF2 de 600.000 iteraciones); sin la clave no sirve.
+  - Para cambiar el token o la clave, usa [`cifrar-token.html`](cifrar-token.html) y reemplaza el texto cifrado (`MXM_VAULT`) en `index.html`.
+  - Recomendado: un token de Apify con permisos limitados (que solo pueda ejecutar ese actor) y un tope de gasto mensual en la cuenta.
   - Cuesta unos US$0,002 por canción, con un tope de US$0,01 por consulta. Lo que no encuentra no se cobra.
   - Funciona con el enlace exacto; el buscador del actor no encuentra bien canciones cristianas en español.
 

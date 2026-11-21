@@ -298,7 +298,7 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
       <label class="field">Contraseña API (si tiene)<input type="password" name="apiPass" placeholder="vacía"></label>
       <label class="field">Puerto RemoteShow<input type="number" name="remotePort" min="1" max="65535" placeholder="5510"></label>
       <label class="field">Contraseña RemoteShow<input type="password" name="remotePass" placeholder="vacía"></label>
-      <label class="field">Token de Apify (Musixmatch)<input type="password" name="apifyToken" placeholder="opcional" autocomplete="off"></label>
+      <label class="field">Clave de Musixmatch<input type="password" name="mxmKey" placeholder="escribe la clave" autocomplete="off"></label>
     </div>
     <div class="settings-actions">
       <button class="btn btn-primary" type="submit">Guardar y reconectar</button>
@@ -311,8 +311,9 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
     Todo queda guardado solo en este navegador. Si el navegador pide permiso para <b>acceder a dispositivos de la red local</b>, acéptalo: es como esta página habla con FreeShow.
   </p>
   <p class="settings-help">
-    <b>Token de Apify</b> (opcional): permite traer letras pegando un enlace de Musixmatch. Cada canción cuesta unos US$0,002 en tu cuenta de Apify; pon un tope de gasto mensual en Apify. El token solo se guarda en este navegador y solo se envía a Apify.
+    <b>Clave de Musixmatch</b>: actívala una vez en cada computador para traer letras pegando un enlace de Musixmatch.
   </p>
+  <p class="note" id="mxm-key-status" style="margin-top:6px"></p>
 </section>
 
 <main class="layout">
@@ -455,7 +456,7 @@ function similarity(a, b) {
    Configuración (solo en este navegador)
    ========================================================================= */
 const DEFAULTS = {
-  host: "localhost", apiPort: 5505, apiPass: "", remotePort: 5510, remotePass: "", apifyToken: "",
+  host: "localhost", apiPort: 5505, apiPass: "", remotePort: 5510, remotePass: "", apifyToken: "", // apifyToken: se rellena al escribir la Clave de Musixmatch
   linesPerSlide: 0, stripChords: true, stripRepeats: true, capitalize: true, category: "song"
 }
 const settings = (() => {
@@ -690,9 +691,22 @@ async function searchLetras(q) {
 
 /* ---------- Musixmatch, vía el actor de Apify «omkar-cloud/musixmatch-scraper» ---------- */
 const MXM_ACTOR = "zHLZaC11cGm9whebu"
+
+// Token de Apify CIFRADO (AES-GCM 256; clave derivada con PBKDF2-SHA256, 600.000 iteraciones).
+// Sin la «Clave de Musixmatch» este texto no sirve. Para cambiarlo usa cifrar-token.html.
+const MXM_VAULT = {"v":1,"iter":600000,"salt":"pLQQRj7CNlIkUSplWAcYhA==","iv":"Fs9RCc/dvTQZRTKN","data":"VfNXOPA8m0U7e4VHdrtlivPANQMHEUoOSY/wS599k5VGe2qfjQeVK7gRFQ2irq7l6Uphd0FDUoz9qe/yDQM="}
+
+async function unlockApifyToken(pass) {
+  if (!MXM_VAULT) throw new Error("novault")
+  const b = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"])
+  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b(MXM_VAULT.salt), iterations: MXM_VAULT.iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["decrypt"])
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b(MXM_VAULT.iv) }, key, b(MXM_VAULT.data))
+  return new TextDecoder().decode(plain)
+}
 const isMusixmatchUrl = (s) => /^https?:\/\/(www\.)?musixmatch\.com\/\S+/i.test(String(s || "").trim())
 const MXM_ERRORS = {
-  notoken: "Falta el token de Apify: pégalo en ⚙ (Configuración).",
+  notoken: "Musixmatch no está activado en este computador: escribe la clave en ⚙ (Configuración).",
   badtoken: "Apify rechazó el token. Revísalo en ⚙.",
   nocredit: "Apify no permitió la consulta: sin saldo o con el límite de gasto alcanzado.",
   forbidden: "El token de Apify no tiene permiso para usar este actor.",
@@ -1371,7 +1385,7 @@ $("#btn-clear-paste").addEventListener("click", () => { $("#paste").value = ""; 
 // Musixmatch (enlace)
 function mxmNote(kind, text) { const n = $("#mxm-note"); n.className = "note" + (kind ? " " + kind : ""); n.textContent = text }
 function resetMxmNote() {
-  mxmNote("", settings.apifyToken ? "Busca la canción en musixmatch.com, copia la dirección y pégala aquí." : "Para usar enlaces de Musixmatch, pega tu token de Apify en ⚙ (Configuración).")
+  mxmNote("", settings.apifyToken ? "Busca la canción en musixmatch.com, copia la dirección y pégala aquí." : "Para usar enlaces de Musixmatch, escribe la clave en ⚙ (Configuración).")
 }
 let mxmBusy = false
 async function loadFromMusixmatch(url) {
@@ -1428,11 +1442,24 @@ const sForm = $("#settings-form")
 function openSettings(open) {
   $("#settings").hidden = !open
   $("#btn-settings").setAttribute("aria-expanded", String(open))
-  if (open) for (const k of ["host", "apiPort", "apiPass", "remotePort", "remotePass", "apifyToken"]) sForm.elements[k].value = settings[k] ?? ""
+  if (!open) return
+  for (const k of ["host", "apiPort", "apiPass", "remotePort", "remotePass"]) sForm.elements[k].value = settings[k] ?? ""
+  sForm.elements.mxmKey.value = ""
+  showMxmKeyStatus()
+}
+function showMxmKeyStatus(kind, text) {
+  const st = $("#mxm-key-status")
+  st.className = "note" + (kind ? " " + kind : "")
+  st.replaceChildren()
+  if (text) { st.textContent = text; return }
+  if (settings.apifyToken) {
+    st.append("✓ Musixmatch está activado en este navegador. ",
+      h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => { settings.apifyToken = ""; saveSettings(); showMxmKeyStatus(); resetMxmNote() } }, "Desactivar"))
+  } else st.textContent = "Musixmatch no está activado en este navegador."
 }
 $("#btn-settings").addEventListener("click", () => openSettings($("#settings").hidden))
 $("#btn-settings-close").addEventListener("click", () => openSettings(false))
-sForm.addEventListener("submit", (e) => {
+sForm.addEventListener("submit", async (e) => {
   e.preventDefault()
   const f = sForm.elements
   settings.host = f.host.value.trim() || DEFAULTS.host
@@ -1440,11 +1467,22 @@ sForm.addEventListener("submit", (e) => {
   settings.apiPass = f.apiPass.value
   settings.remotePort = Number(f.remotePort.value) || DEFAULTS.remotePort
   settings.remotePass = f.remotePass.value
-  settings.apifyToken = f.apifyToken.value.trim()
+  const mxmKey = f.mxmKey.value.trim()
+  let keyOk = true
+  if (mxmKey) {
+    if (/^apify_api_/.test(mxmKey)) settings.apifyToken = mxmKey // token propio (uso avanzado)
+    else {
+      showMxmKeyStatus("", "Comprobando la clave…")
+      try { settings.apifyToken = await unlockApifyToken(mxmKey) } catch { keyOk = false }
+    }
+  }
   saveSettings()
-  openSettings(false)
   resetMxmNote()
   startConnection()
+  if (!keyOk) { showMxmKeyStatus("err", "Clave de Musixmatch incorrecta."); return }
+  f.mxmKey.value = ""
+  showMxmKeyStatus()
+  openSettings(false)
 })
 $("#btn-retry").addEventListener("click", startConnection)
 $("#pill-api").addEventListener("click", () => openSettings(true))
