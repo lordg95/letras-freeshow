@@ -109,6 +109,9 @@ button { cursor: pointer; }
   background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; flex: none;
 }
 .panel-body { padding: 0 16px 16px; }
+.panel { scroll-margin-top: 12px; }
+.panel-head .head-action { margin-left: auto; }
+.btn-danger-soft { color: var(--err); }
 .sticky-col { position: sticky; top: 70px; }
 
 /* ---------- Controls ---------- */
@@ -146,7 +149,16 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .tab[aria-selected="true"] { background: var(--panel-3); color: var(--text); }
 
 .search-row { display: flex; gap: 8px; }
-.search-row input { flex: 1; }
+.search-box { position: relative; flex: 1; min-width: 0; display: flex; }
+.search-box input { flex: 1; padding-right: 36px; }
+input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.search-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border-radius: 6px; border: 0;
+  background: transparent; color: var(--muted); display: grid; place-items: center;
+}
+.search-clear:hover { background: var(--panel-3); color: var(--text); }
+.more-btn { justify-self: start; margin-top: 2px; }
 
 /* ---------- Results ---------- */
 .results { margin-top: 14px; display: grid; gap: 14px; }
@@ -234,6 +246,9 @@ details.cleaned li { overflow-wrap: anywhere; }
   text-align: center; font-size: 9.5px; line-height: 1.3; color: #fff;
 }
 .pv-slide.child { border-top-color: transparent; }
+.pv-slide { container-type: inline-size; }
+.pv-slide > div { font-size: clamp(9.5px, 4.6cqi, 15px); }
+.preview > .empty { grid-column: 1 / -1; }
 .pv-slide.reused { opacity: .45; }
 .summary { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
 .summary b { color: var(--text); }
@@ -251,12 +266,16 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
   .layout { grid-template-columns: minmax(260px, 340px) 1fr; }
   .col-preview { grid-column: 1 / -1; }
   .sticky-col { position: static; }
-  .preview { max-height: none; }
-  .pv-slides { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .preview { max-height: none; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); align-items: start; }
+  .pv-slides { grid-template-columns: 1fr; }
+  .brand { white-space: nowrap; }
+  .brand small { display: none; }
 }
 @media (max-width: 760px) {
-  .top { padding: 10px 16px; flex-wrap: wrap; }
-  .brand small { display: none; }
+  .top { padding: 10px 16px; flex-wrap: wrap; gap: 8px; position: static; }
+  .pill { order: 3; flex: 1 1 40%; min-width: 0; }
+  .pill-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .layout { grid-template-columns: 1fr; padding: 12px 16px 24px; }
   .settings { padding: 14px 16px; }
   .meta-row { grid-template-columns: 1fr; }
@@ -324,16 +343,21 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
       </div>
       <div id="pane-search" role="tabpanel" aria-labelledby="tab-search">
         <form class="search-row" id="search-form">
-          <input type="search" id="q" placeholder="Título, artista o nº de himno" aria-label="Buscar canción" autocomplete="off">
+          <div class="search-box">
+            <input type="search" id="q" placeholder="Título, artista o nº de himno" aria-label="Buscar canción" autocomplete="off" enterkeyhint="search">
+            <button class="search-clear" id="btn-clear-search" type="button" title="Borrar la búsqueda (Esc)" aria-label="Borrar la búsqueda" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
           <button class="btn btn-primary" type="submit">Buscar</button>
         </form>
         <div class="results" id="results" aria-live="polite">
-          <div class="empty">Escribe el título, el artista o el número de himno.<br>Se busca en tu FreeShow, LRCLIB y Letras.com a la vez.<br><br>¿Ya copiaste una letra? Pulsa <kbd class="kbd" data-paste-key>⌘V</kbd> en cualquier parte de esta página y se ordena sola.</div>
+          <div class="empty">Escribe el título, el artista o el número de himno.<br>Se busca en tu FreeShow, LRCLIB y Letras.com a la vez.<br><br><span data-touch="¿Ya copiaste una letra? Ve a «Pegar letra» y toca «Pegar y ordenar»: se ordena sola.">¿Ya copiaste una letra? Pulsa <kbd class="kbd" data-paste-key>⌘V</kbd> en cualquier parte de esta página y se ordena sola.</span></div>
         </div>
       </div>
       <div id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" hidden>
         <div class="paste-intro">
-          <p class="note">Copia la letra en cualquier página y pégala aquí con <kbd class="kbd" data-paste-key>⌘V</kbd>. Se quitan solos los créditos, botones y acordes, y se ordena en Verso, Coro, Puente…</p>
+          <p class="note"><span data-touch="Copia la letra en cualquier página y toca «Pegar y ordenar» (o mantén presionado el cuadro y elige Pegar).">Copia la letra en cualquier página y pégala aquí con <kbd class="kbd" data-paste-key>⌘V</kbd>.</span> Se quitan solos los créditos, botones y acordes, y se ordena en Verso, Coro, Puente…</p>
           <div class="web-links" id="paste-sites"></div>
         </div>
         <textarea id="paste" rows="14" placeholder="Pega aquí la letra copiada de cualquier página.&#10;&#10;Si trae títulos como «Coro», «Verso 2» o «Puente», se usan para ordenar las diapositivas.&#10;&#10;También puedes pegar el enlace de la canción (Musixmatch, Letras.com, Genius…) para preparar el nombre y el artista."></textarea>
@@ -349,7 +373,8 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
 
   <!-- 2. Ordenar -->
   <section class="panel" aria-labelledby="h-edit">
-    <div class="panel-head"><span class="step">2</span><h2 id="h-edit">Ordenar en grupos</h2></div>
+    <div class="panel-head"><span class="step">2</span><h2 id="h-edit">Ordenar en grupos</h2>
+      <button class="btn btn-ghost btn-sm head-action" id="btn-new" type="button" title="Borrar esta letra y empezar otra" hidden>Nueva canción</button></div>
     <div class="panel-body">
       <div id="lookup-msg"></div>
       <div class="meta-row">
@@ -415,6 +440,9 @@ const $ = (s, el = document) => el.querySelector(s)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const enc = encodeURIComponent
 const PASTE_KEY = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent) ? "⌘V" : "Ctrl+V"
+// celulares y tabletas sin teclado: no hay ⌘V, se usa el botón «Pegar y ordenar»
+const IS_TOUCH = matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches
+const PASTE_HOW = IS_TOUCH ? "toca «Pegar y ordenar» en «Pegar letra»" : `pulsa ${PASTE_KEY}`
 
 function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag)
@@ -999,7 +1027,7 @@ const state = {
 
 const api = new FreeShowAPI(setApiStatus)
 
-function setPill(el, st, text) { el.dataset.state = st; $(".pill-text", el).textContent = text }
+function setPill(el, st, text) { el.dataset.state = st; $(".pill-text", el).textContent = text; el.title = text }
 
 function setApiStatus(st) {
   const offText = { blocked: "Bloqueado por el navegador", prompt: "Acepta el aviso del navegador", unreachable: "FreeShow no responde" }[state.connIssue] || "FreeShow: sin conexión"
@@ -1078,7 +1106,9 @@ async function loadCategories() {
     list = [{ id: "song", name: nice.song }, { id: "presentation", name: nice.presentation }]
     // categorías usadas en la biblioteca que no conocemos por nombre
     const used = new Set(Object.values(state.shows).map((s) => s.category).filter(Boolean))
-    used.forEach((id) => { if (!list.some((c) => c.id === id) && id !== "scripture") list.push({ id, name: `Categoría ${id}` }) })
+    const count = {}
+    Object.values(state.shows).forEach((s) => { if (s.category) count[s.category] = (count[s.category] || 0) + 1 })
+    Object.keys(count).forEach((id) => { if (!list.some((c) => c.id === id) && id !== "scripture") list.push({ id, name: `Otra categoría (${count[id]} shows)`, unnamed: true }) })
   }
   state.categories = list
   renderCategories()
@@ -1099,7 +1129,7 @@ async function runSearch(q) {
   q = q.trim()
   if (!q) return
   // un enlace de una página de letras pegado en el buscador
-  if (isUrl(q)) { $("#q").value = ""; return openFromUrl(q) }
+  if (isUrl(q)) { $("#q").value = ""; syncClearSearch(); return openFromUrl(q) }
   const seq = ++searchSeq
   const box = $("#results")
   box.replaceChildren(h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("div", { class: "skeleton" }))
@@ -1111,8 +1141,11 @@ async function runSearch(q) {
   if (seq !== searchSeq) return
 
   const libItems = api.connected ? searchLibrary(q) : null
-  const lrItems = lr.status === "fulfilled" ? lr.value : null
-  const leItems = le.status === "fulfilled" ? le.value : null
+  // los que más se parecen a lo buscado primero (LRCLIB también devuelve coincidencias por álbum)
+  const rank = (it) => Math.max(similarity(it.title, q), similarity(`${it.title} ${it.artist || ""}`, q))
+  const byRank = (arr) => arr.map((it, i) => ({ it, i, r: rank(it) })).sort((a, b) => b.r - a.r || a.i - b.i).map((x) => x.it)
+  const lrItems = lr.status === "fulfilled" ? byRank(lr.value) : null
+  const leItems = le.status === "fulfilled" ? byRank(le.value) : null
 
   const groups = [libraryGroup(libItems)]
   if (!onlyNumber) {
@@ -1153,7 +1186,8 @@ function searchLibrary(q) {
 }
 
 function categoryLabel(id) {
-  return state.categories.find((c) => c.id === id)?.name || { song: "Canciones", presentation: "Presentaciones" }[id] || (id ? "Otra categoría" : "Sin categoría")
+  const c = state.categories.find((x) => x.id === id)
+  return (c && !c.unnamed ? c.name : null) || { song: "Canciones", presentation: "Presentaciones" }[id] || (id ? "Otra categoría" : "Sin categoría")
 }
 
 function libraryGroup(items) {
@@ -1163,11 +1197,11 @@ function libraryGroup(items) {
   if (!items.length) { wrap.append(h("div", { class: "note faint", text: "No está en tu biblioteca." })); return wrap }
   const list = h("div", { class: "result-list" })
   for (const it of items) {
-    const meta = h("span", { class: "result-meta", text: `${categoryLabel(it.category)} · clic para abrirla en FreeShow` })
+    const meta = h("span", { class: "result-meta", text: `${categoryLabel(it.category)} · Abrir en FreeShow` })
     const btn = h("button", { class: "result result-lib", type: "button", title: "Abrir en FreeShow (no la proyecta)", onclick: () => {
       try {
         api.send("id_select_show", { id: it.id })
-        meta.textContent = `${categoryLabel(it.category)} · ✓ abierta en FreeShow`
+        meta.textContent = `${categoryLabel(it.category)} · ✓ Abierta en FreeShow`
       } catch { meta.textContent = "Sin conexión con FreeShow" }
     } }, h("span", { class: "result-title", text: it.title }), meta)
     list.append(btn)
@@ -1181,7 +1215,7 @@ function webGroup(q) {
   return h("div", { class: "result-group" },
     h("h3", {}, h("span", { text: "Buscar en la web" })),
     h("div", { class: "web-links" }, siteLinks(q)),
-    h("p", { class: "note", text: `Se abre en otra pestaña. Copia la letra, vuelve aquí y pulsa ${PASTE_KEY}: se ordena sola.` }))
+    h("p", { class: "note", text: `Se abre en otra pestaña. Copia la letra, vuelve aquí y ${PASTE_HOW}: se ordena sola.` }))
 }
 
 function resultGroup(title, items, err) {
@@ -1190,13 +1224,19 @@ function resultGroup(title, items, err) {
   if (!items) { wrap.append(h("div", { class: "note", text: "No se pudo consultar (" + (err?.message || "error") + ")." })); return wrap }
   if (!items.length) { wrap.append(h("div", { class: "note faint", text: "Sin resultados." })); return wrap }
   const list = h("div", { class: "result-list" })
-  for (const it of items) {
+  const item = (it) => {
     const btn = h("button", { class: "result", type: "button", onclick: () => pickResult(it, btn) },
       h("span", { class: "result-title", text: it.title }),
       h("span", { class: "result-meta", text: [it.artist, it.album].filter(Boolean).join(" · ") }),
       it.lyrics ? h("span", { class: "result-snippet", text: it.lyrics.split("\n").find((l) => l.trim()) || "" }) : null
     )
-    list.append(btn)
+    return btn
+  }
+  const SHOW = 5
+  items.slice(0, SHOW).forEach((it) => list.append(item(it)))
+  if (items.length > SHOW) {
+    const more = h("button", { class: "btn btn-ghost btn-sm more-btn", type: "button", text: `Ver ${items.length - SHOW} más`, onclick: () => { more.replaceWith(...items.slice(SHOW).map(item)) } })
+    list.append(more)
   }
   wrap.append(list)
   return wrap
@@ -1223,7 +1263,7 @@ async function pickResult(it, btn) {
   checkDuplicate()
   msg.replaceChildren(h("div", { class: "callout warn", style: { marginBottom: "12px" } },
     h("p", {}, h("b", { text: "Esta letra no se puede traer automáticamente." })),
-    h("p", { text: `Ábrela en Letras.com, copia la letra completa, vuelve aquí y pulsa ${PASTE_KEY}: se ordena sola. El nombre y el artista ya quedaron listos.` }),
+    h("p", { text: `Ábrela en Letras.com, copia la letra completa, vuelve aquí y ${PASTE_HOW}: se ordena sola. El nombre y el artista ya quedaron listos.` }),
     h("div", { class: "actions" },
       h("a", { class: "btn btn-sm btn-primary", href: it.url, target: "_blank", rel: "noopener", text: "Abrir en Letras.com ↗" }),
       h("button", { class: "btn btn-sm", type: "button", onclick: () => { selectTab("paste"); $("#paste").focus() }, text: "Ir a «Pegar letra»" })
@@ -1247,6 +1287,7 @@ async function openFromUrl(url) {
   else if (state.metaSource !== "user") { $("#f-name").value = ""; $("#f-artist").value = "" }
   renderBlocks()
   renderPasteSites()
+  revealEditor()
   const msg = $("#lookup-msg")
   const openBtn = () => h("a", { class: "btn btn-sm btn-primary", href: info.url, target: "_blank", rel: "noopener", text: `Abrir en ${info.site} ↗` })
   const label = info.title ? `«${info.title}»${info.artist ? " — " + info.artist : ""}` : ""
@@ -1275,7 +1316,7 @@ async function openFromUrl(url) {
   renderPasteSites()
   msg.replaceChildren(h("div", { class: "callout warn", style: { marginBottom: "12px" } },
     h("p", {}, h("b", { text: `Enlace de ${info.site}` }), label ? ": " + label : ""),
-    h("p", { text: `Las páginas de letras no dejan que otra página lea su contenido. Abre la página, copia la letra completa, vuelve aquí y pulsa ${PASTE_KEY}: se limpia y se ordena sola.` }),
+    h("p", { text: `Las páginas de letras no dejan que otra página lea su contenido. Abre la página, copia la letra completa, vuelve aquí y ${PASTE_HOW}: se limpia y se ordena sola.` }),
     h("div", { class: "actions" }, openBtn())))
 }
 
@@ -1346,6 +1387,14 @@ function loadSong({ name, artist, lyrics, author = "", copyright = "" }) {
   renderBlocks()
   checkDuplicate()
   renderPasteSites()
+  revealEditor()
+}
+
+/** En pantallas angostas el editor queda debajo de los resultados: llevar la vista hasta él. */
+function revealEditor() {
+  if (!matchMedia("(max-width: 760px)").matches) return
+  const panel = $("#h-edit").closest(".panel")
+  if (panel.getBoundingClientRect().top > 80) panel.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })
 }
 
 function groupSelect(block) {
@@ -1359,10 +1408,11 @@ function autoSize(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHei
 function renderBlocks() {
   const box = $("#blocks")
   $("#btn-add-block").hidden = !state.blocks.length
+  syncNewButton()
   if (!state.blocks.length) {
     box.replaceChildren(h("div", { class: "editor-empty" },
       h("h3", { text: "Aún no hay letra" }),
-      h("p", {}, "Elige un resultado, o copia una letra en cualquier página y pulsa ", h("kbd", { class: "kbd", text: PASTE_KEY }), " aquí. Se ordena sola en Verso, Coro, Puente… igual que en FreeShow, y puedes cambiar cada bloque. Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo.")))
+      h("p", {}, "Elige un resultado, o copia una letra en cualquier página y ", IS_TOUCH ? "toca «Pegar y ordenar» en «Pegar letra»" : ["pulsa ", h("kbd", { class: "kbd", text: PASTE_KEY }), " aquí"], ". Se ordena sola en Verso, Coro, Puente… igual que en FreeShow, y puedes cambiar cada bloque. Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo.")))
     renderPreview()
     return
   }
@@ -1568,6 +1618,8 @@ function resetForNext() {
   renderBlocks()
   selectTab("search")
   const q = $("#q"); q.select(); q.focus()
+  syncClearSearch()
+  window.scrollTo({ top: 0 })
 }
 
 /* =========================================================================
@@ -1585,6 +1637,37 @@ $("#tab-search").addEventListener("click", () => selectTab("search"))
 $("#tab-paste").addEventListener("click", () => selectTab("paste"))
 
 $("#search-form").addEventListener("submit", (e) => { e.preventDefault(); runSearch($("#q").value) })
+let RESULTS_EMPTY = ""
+function syncClearSearch() { $("#btn-clear-search").hidden = !$("#q").value }
+function clearSearch() {
+  searchSeq++ // descarta una búsqueda que aún no termina
+  $("#q").value = ""
+  $("#results").innerHTML = RESULTS_EMPTY
+  syncClearSearch()
+  $("#q").focus()
+}
+$("#btn-clear-search").addEventListener("click", clearSearch)
+$("#q").addEventListener("input", () => { syncClearSearch(); if (!$("#q").value) clearSearch() })
+$("#q").addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#q").value) { e.preventDefault(); clearSearch() } })
+
+// Nueva canción: pide un segundo clic para no borrar el trabajo por accidente
+let newArmed = null
+function syncNewButton() {
+  const b = $("#btn-new")
+  b.hidden = !state.blocks.length && !$("#f-name").value.trim()
+  if (b.hidden || !newArmed) { clearTimeout(newArmed); newArmed = null; b.textContent = "Nueva canción"; b.classList.remove("btn-danger-soft") }
+}
+$("#btn-new").addEventListener("click", () => {
+  const b = $("#btn-new")
+  if (!newArmed) {
+    b.textContent = "¿Borrar esta letra? Pulsa otra vez"
+    b.classList.add("btn-danger-soft")
+    newArmed = setTimeout(() => { newArmed = null; syncNewButton() }, 4000)
+    return
+  }
+  clearTimeout(newArmed); newArmed = null
+  resetForNext()
+})
 $("#btn-use-paste").addEventListener("click", () => {
   const txt = $("#paste").value
   if (!txt.trim()) return $("#paste").focus()
@@ -1597,7 +1680,7 @@ $("#btn-clipboard").addEventListener("click", async () => {
     if (!txt.trim()) return pasteNote("err", "El portapapeles está vacío: copia primero la letra en la página.")
     organizePasted(txt)
   } catch {
-    pasteNote("", `El navegador no dejó leer el portapapeles. Haz clic en el cuadro y pulsa ${PASTE_KEY}.`)
+    pasteNote("", IS_TOUCH ? "El navegador no dejó leer el portapapeles. Mantén presionado el cuadro y elige «Pegar»." : `El navegador no dejó leer el portapapeles. Haz clic en el cuadro y pulsa ${PASTE_KEY}.`)
     $("#paste").focus()
   }
 })
@@ -1624,11 +1707,12 @@ document.addEventListener("paste", (e) => {
   // una sola línea: es un título, buscarlo
   selectTab("search")
   $("#q").value = text.trim()
+  syncClearSearch()
   runSearch(text)
 })
 $("#btn-add-block").addEventListener("click", () => { state.blocks.push({ group: "verse", text: "" }); renderBlocks(); const tas = document.querySelectorAll(".block textarea"); tas[tas.length - 1]?.focus() })
 
-$("#f-name").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; checkDuplicate(); renderPreviewSoon(); renderPasteSites() })
+$("#f-name").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; checkDuplicate(); renderPreviewSoon(); renderPasteSites(); syncNewButton() })
 $("#f-artist").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; renderPreviewSoon(); renderPasteSites() })
 $("#f-category").addEventListener("change", (e) => { settings.category = e.target.value; saveSettings() })
 $("#btn-create").addEventListener("click", createInFreeShow)
@@ -1684,6 +1768,10 @@ $("#pill-remote").addEventListener("click", () => openSettings(true))
    ========================================================================= */
 syncOptions()
 document.querySelectorAll("[data-paste-key]").forEach((k) => (k.textContent = PASTE_KEY))
+if (IS_TOUCH) document.querySelectorAll("[data-touch]").forEach((el) => (el.textContent = el.dataset.touch))
+renderBlocks()
+RESULTS_EMPTY = $("#results").innerHTML
+syncClearSearch()
 renderCategories()
 renderPreview()
 if (typeof io !== "function") {
