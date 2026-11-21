@@ -163,13 +163,15 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .result-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-meta { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-lib { border-left: 3px solid var(--ok); border-radius: 0 8px 8px 0; }
-.mxm { display: grid; gap: 6px; margin-bottom: 4px; }
-.mxm .note { margin: 0; }
-.mxm .note.err { color: var(--err); }
-.mxm .note.ok { color: var(--ok); }
-.divider { display: flex; align-items: center; gap: 10px; margin: 12px 0; color: var(--faint); font-size: 12px; }
-.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.paste-intro { display: grid; gap: 8px; margin-bottom: 12px; }
+.paste-intro .note { margin: 0; }
+.paste-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.kbd { display: inline-block; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line-strong); background: var(--panel-3); font: 600 12px/1.6 var(--font); color: var(--text); }
 .web-links { display: flex; flex-wrap: wrap; gap: 6px; }
+details.cleaned { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+details.cleaned summary { cursor: pointer; }
+details.cleaned ul { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow: auto; }
+details.cleaned li { overflow-wrap: anywhere; }
 .web-links .btn { text-decoration: none; }
 .result-snippet { font-size: 12px; color: var(--faint); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .muted { color: var(--muted); }
@@ -298,7 +300,6 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
       <label class="field">Contraseña API (si tiene)<input type="password" name="apiPass" placeholder="vacía"></label>
       <label class="field">Puerto RemoteShow<input type="number" name="remotePort" min="1" max="65535" placeholder="5510"></label>
       <label class="field">Contraseña RemoteShow<input type="password" name="remotePass" placeholder="vacía"></label>
-      <label class="field">Clave de Musixmatch<input type="password" name="mxmKey" placeholder="escribe la clave" autocomplete="off"></label>
     </div>
     <div class="settings-actions">
       <button class="btn btn-primary" type="submit">Guardar y reconectar</button>
@@ -310,10 +311,6 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
     Para traer los nombres de tus categorías activa también <b>RemoteShow</b> y escribe aquí su contraseña.
     Todo queda guardado solo en este navegador. Si el navegador pide permiso para <b>acceder a dispositivos de la red local</b>, acéptalo: es como esta página habla con FreeShow.
   </p>
-  <p class="settings-help">
-    <b>Clave de Musixmatch</b>: actívala una vez en cada computador para traer letras pegando un enlace de Musixmatch.
-  </p>
-  <p class="note" id="mxm-key-status" style="margin-top:6px"></p>
 </section>
 
 <main class="layout">
@@ -331,24 +328,21 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
           <button class="btn btn-primary" type="submit">Buscar</button>
         </form>
         <div class="results" id="results" aria-live="polite">
-          <div class="empty">Escribe el título, el artista o el número de himno.<br>Se busca en tu FreeShow, LRCLIB y Letras.com a la vez.</div>
+          <div class="empty">Escribe el título, el artista o el número de himno.<br>Se busca en tu FreeShow, LRCLIB y Letras.com a la vez.<br><br>¿Ya copiaste una letra? Pulsa <kbd class="kbd" data-paste-key>⌘V</kbd> en cualquier parte de esta página y se ordena sola.</div>
         </div>
       </div>
       <div id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" hidden>
-        <form class="mxm" id="mxm-form">
-          <label class="field" for="mxm-url">Enlace de Musixmatch</label>
-          <div class="search-row">
-            <input type="url" id="mxm-url" placeholder="https://www.musixmatch.com/es/letras/…" autocomplete="off">
-            <button class="btn btn-primary" type="submit">Traer</button>
-          </div>
-          <p class="note" id="mxm-note">Busca la canción en musixmatch.com, copia la dirección y pégala aquí.</p>
-        </form>
-        <div class="divider"><span>o pega la letra</span></div>
-        <textarea id="paste" rows="14" placeholder="Pega aquí la letra copiada de cualquier página.&#10;&#10;Si trae títulos como «Coro», «Verso 2» o «Puente», se usan para ordenar las diapositivas."></textarea>
-        <div style="display:flex; gap:8px; margin-top:10px;">
-          <button class="btn btn-primary" id="btn-use-paste" type="button">Ordenar esta letra</button>
+        <div class="paste-intro">
+          <p class="note">Copia la letra en cualquier página y pégala aquí con <kbd class="kbd" data-paste-key>⌘V</kbd>. Se quitan solos los créditos, botones y acordes, y se ordena en Verso, Coro, Puente…</p>
+          <div class="web-links" id="paste-sites"></div>
+        </div>
+        <textarea id="paste" rows="14" placeholder="Pega aquí la letra copiada de cualquier página.&#10;&#10;Si trae títulos como «Coro», «Verso 2» o «Puente», se usan para ordenar las diapositivas.&#10;&#10;También puedes pegar el enlace de la canción (Musixmatch, Letras.com, Genius…) para preparar el nombre y el artista."></textarea>
+        <div class="paste-actions">
+          <button class="btn btn-primary" id="btn-clipboard" type="button">Pegar y ordenar</button>
+          <button class="btn" id="btn-use-paste" type="button" title="Ordenar lo que está en el cuadro">Ordenar</button>
           <button class="btn btn-ghost" id="btn-clear-paste" type="button">Limpiar</button>
         </div>
+        <p class="note" id="paste-note"></p>
       </div>
     </div>
   </section>
@@ -379,7 +373,7 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
       <div id="blocks" class="blocks">
         <div class="editor-empty">
           <h3>Aún no hay letra</h3>
-          <p>Elige un resultado o pega una letra. Aquí podrás marcar cada estrofa como Verso, Coro, Puente… igual que en FreeShow. Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo.</p>
+          <p>Elige un resultado, o copia una letra en cualquier página y pulsa <kbd class="kbd" data-paste-key>⌘V</kbd> aquí. Se ordena sola en Verso, Coro, Puente… igual que en FreeShow, y puedes cambiar cada bloque. Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo.</p>
         </div>
       </div>
       <button class="btn btn-ghost btn-sm add-block" id="btn-add-block" type="button" hidden>+ Añadir bloque</button>
@@ -420,6 +414,7 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
 const $ = (s, el = document) => el.querySelector(s)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const enc = encodeURIComponent
+const PASTE_KEY = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent) ? "⌘V" : "Ctrl+V"
 
 function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag)
@@ -456,13 +451,15 @@ function similarity(a, b) {
    Configuración (solo en este navegador)
    ========================================================================= */
 const DEFAULTS = {
-  host: "localhost", apiPort: 5505, apiPass: "", remotePort: 5510, remotePass: "", apifyToken: "", // apifyToken: se rellena al escribir la Clave de Musixmatch
+  host: "localhost", apiPort: 5505, apiPass: "", remotePort: 5510, remotePass: "",
   linesPerSlide: 0, stripChords: true, stripRepeats: true, capitalize: true, category: "song"
 }
 const settings = (() => {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("freeshow-letras") || "{}") } } catch { return { ...DEFAULTS } }
 })()
 function saveSettings() { try { localStorage.setItem("freeshow-letras", JSON.stringify(settings)) } catch {} }
+// versiones anteriores guardaban aquí un token de Apify (Musixmatch): se borra
+if ("apifyToken" in settings) { delete settings.apifyToken; saveSettings() }
 
 /* =========================================================================
    Grupos de FreeShow (ids globales: se reconocen en cualquier idioma)
@@ -483,16 +480,18 @@ const GROUP = Object.fromEntries(GROUPS.map((g) => [g.id, g]))
    Lectura y limpieza de letras
    ========================================================================= */
 const LABELS = [
-  [/^(pre[\s\-_]*(coro|chorus|estribillo)|precoro)$/i, "pre_chorus"],
-  [/^(post[\s\-_]*(coro|chorus)|tag|etiqueta|coda)$/i, "tag"],
-  [/^(coros?|estribillo|chorus|refr[aá]n|refrain)$/i, "chorus"],
-  [/^(versos?|estrofa|verse|strophe)$/i, "verse"],
+  [/^(pre[\s\-_]*(coro|chorus|estribillo|refr[aá]n)|precoro|prechorus)$/i, "pre_chorus"],
+  [/^(post[\s\-_]*(coro|chorus)|postcoro|tag|etiqueta|coda|vamp)$/i, "tag"],
+  [/^(coros?|estribillo|chorus|refr[aá]n|refrain|hook)$/i, "chorus"],
+  [/^(versos?|estrofas?|verse|strophe)$/i, "verse"],
   [/^(puente|bridge)$/i, "bridge"],
   [/^(intro|introducci[oó]n)$/i, "intro"],
   [/^(final|outro|cierre|ending)$/i, "outro"],
-  [/^(interludio|instrumental|pausa|break)$/i, "break"]
+  [/^(interludio|interlude|instrumental|pausa|break)$/i, "break"]
 ]
 const matchLabel = (word) => { for (const [re, g] of LABELS) if (re.test(String(word).trim())) return g; return null }
+// "[Verso 1: Marcos Barrientos]", "[Coro: Todos]" (formato de Genius)
+const BRACKET_HEADER = /^\s*\[\s*([a-záéíóúñü][a-záéíóúñü\s\-_]*?)\s*\d*\s*(?::[^\]]*)?\]\s*$/i
 
 // "Coro", "[Coro 2]", "CORO (x2):", "Verso 1:", "Pre-coro", "Estribillo 2x"
 const HEADER_LINE = /^\s*[\[\(\{]?\s*([a-záéíóúñü][a-záéíóúñü\s\-_]*?)\s*(\d+)?\s*[\]\)\}]?\s*[:.\-–]?\s*(?:[\(\[]?\s*(?:[x×]\s*\d+|\d+\s*[x×]|bis)\s*[\)\]]?)?\s*:?\s*$/i
@@ -510,7 +509,7 @@ function isChordLine(line) {
 }
 
 function parseHeader(line) {
-  const m = line.match(HEADER_LINE)
+  const m = line.match(HEADER_LINE) || line.match(BRACKET_HEADER)
   if (!m) return null
   const g = matchLabel(m[1])
   return g ? { group: g } : null
@@ -531,16 +530,26 @@ function parseLyrics(raw, { title = "" } = {}) {
   let cur = null
   let pending = null
   const flush = () => { if (cur && cur.lines.length) blocks.push(cur); cur = null }
+  // un título suelto sin texto debajo («Coro» antes de otro título o al final) significa «se repite»
+  const repeatPending = () => {
+    if (!pending) return
+    const prev = [...blocks].reverse().find((b) => b.group === pending && b.lines.some((l) => !isChordLine(l)))
+    if (prev) blocks.push({ ...prev, lines: [...prev.lines] })
+    pending = null
+  }
 
   for (const line of lines) {
     if (!line) { flush(); continue }
     if (/^\{.*\}$/.test(line)) continue // directivas ChordPro
     if (MARKER_LINE.test(line)) continue
     const hdr = parseHeader(line)
-    if (hdr) { flush(); pending = hdr.group; continue }
+    if (hdr) { flush(); repeatPending(); pending = hdr.group; continue }
     const ih = line.match(INLINE_HEADER)
     if (ih && matchLabel(ih[1])) {
       flush()
+      repeatPending()
+      // "Intro: G D Em C" (solo acordes): no es letra
+      if (isChordLine(ih[2])) continue
       cur = { group: matchLabel(ih[1]), explicit: true, lines: [ih[2].trim()] }
       continue
     }
@@ -548,6 +557,9 @@ function parseLyrics(raw, { title = "" } = {}) {
     cur.lines.push(line)
   }
   flush()
+  repeatPending()
+  // bloques que solo tienen acordes (intros instrumentales de páginas de acordes)
+  blocks = blocks.filter((b) => b.lines.some((l) => !isChordLine(l)))
 
   // quitar una primera línea suelta que solo repite el título
   if (title && blocks.length > 1 && blocks[0].lines.length === 1 && norm(blocks[0].lines[0]) === norm(title)) blocks.shift()
@@ -557,14 +569,29 @@ function parseLyrics(raw, { title = "" } = {}) {
 
   if (hasHeaders) {
     // Con títulos: un bloque sin título continúa el anterior, salvo que repita otro ya marcado.
+    // Si solo se marcó el coro (sin «Verso»), lo que viene sin título es una estrofa nueva.
+    const versesLabeled = blocks.some((b) => b.explicit && b.group === "verse")
     const merged = []
     for (const b of blocks) {
       if (b.explicit || !merged.length) { merged.push({ ...b, group: b.group || "verse" }); continue }
       const twin = merged.find((m) => similarity(key(m), key(b)) >= 0.8)
       if (twin) merged.push({ ...b, group: twin.group })
+      else if (!versesLabeled) merged.push({ ...b, group: "verse" })
       else merged[merged.length - 1].lines.push("", ...b.lines)
     }
     blocks = merged
+    // Coro escrito una sola vez justo después de la 1.ª estrofa (himnarios): se canta tras cada estrofa
+    const choruses = blocks.filter((b) => b.group === "chorus")
+    const verses = blocks.filter((b) => b.group === "verse")
+    const ci = blocks.indexOf(choruses[0])
+    if (versesLabeled && choruses.length === 1 && verses.length >= 2 && blocks[ci - 1] === verses[0]) {
+      const withChorus = []
+      blocks.forEach((b, i) => {
+        withChorus.push(b)
+        if (i > ci && b.group === "verse" && blocks[i + 1]?.group !== "chorus") withChorus.push({ ...choruses[0], lines: [...choruses[0].lines] })
+      })
+      blocks = withChorus
+    }
   } else {
     autoGroups(blocks, key)
   }
@@ -648,6 +675,7 @@ const metaSafe = (s) => String(s || "").replace(/[:=\n\r]/g, " ").replace(/\s+/g
 function buildText(song, opt) {
   const meta = [`Title=${metaSafe(song.name)}`]
   if (song.artist) meta.push(`Artist=${metaSafe(song.artist)}`)
+  if (song.author) meta.push(`Author=${metaSafe(song.author)}`)
   if (song.copyright) meta.push(`Copyright=${metaSafe(song.copyright)}`)
   const parts = [meta.join("\n")]
   for (const b of song.blocks) {
@@ -689,62 +717,161 @@ async function searchLetras(q) {
     .map((d) => ({ source: "letras", title: d.txt, artist: d.art, url: `https://www.letras.com/${d.dns}/${d.url}/` }))
 }
 
-/* ---------- Musixmatch, vía el actor de Apify «omkar-cloud/musixmatch-scraper» ---------- */
-const MXM_ACTOR = "zHLZaC11cGm9whebu"
-
-// Token de Apify CIFRADO (AES-GCM 256; clave derivada con PBKDF2-SHA256, 600.000 iteraciones).
-// Sin la «Clave de Musixmatch» este texto no sirve. Para cambiarlo usa cifrar-token.html.
-const MXM_VAULT = {"v":1,"iter":600000,"salt":"pLQQRj7CNlIkUSplWAcYhA==","iv":"Fs9RCc/dvTQZRTKN","data":"VfNXOPA8m0U7e4VHdrtlivPANQMHEUoOSY/wS599k5VGe2qfjQeVK7gRFQ2irq7l6Uphd0FDUoz9qe/yDQM="}
-
-async function unlockApifyToken(pass) {
-  if (!MXM_VAULT) throw new Error("novault")
-  const b = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
-  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"])
-  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: b(MXM_VAULT.salt), iterations: MXM_VAULT.iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["decrypt"])
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b(MXM_VAULT.iv) }, key, b(MXM_VAULT.data))
-  return new TextDecoder().decode(plain)
-}
-const isMusixmatchUrl = (s) => /^https?:\/\/(www\.)?musixmatch\.com\/\S+/i.test(String(s || "").trim())
-const MXM_ERRORS = {
-  notoken: "Musixmatch no está activado en este computador: escribe la clave en ⚙ (Configuración).",
-  badtoken: "Apify rechazó el token. Revísalo en ⚙.",
-  nocredit: "Apify no permitió la consulta: sin saldo o con el límite de gasto alcanzado.",
-  forbidden: "El token de Apify no tiene permiso para usar este actor.",
-  notfound: "Musixmatch no encontró esa dirección (no se cobró). Revisa que sea el enlace de la canción.",
-  nolyrics: "Esa ficha de Musixmatch no tiene letra. Prueba con otra versión de la canción.",
-  timeout: "Musixmatch tardó demasiado. Inténtalo de nuevo.",
-  offline: "No hay conexión a internet o Apify no respondió."
+/* ---------- Sitios para copiar letras (se abren en otra pestaña) ---------- */
+const google = (q) => `https://www.google.com/search?q=${enc(q)}`
+const SITES = [
+  { name: "Google", host: "google.com", home: "https://www.google.com/", url: (q) => google(q + " letra") },
+  { name: "Letras.com", host: "letras.com", home: "https://www.letras.com/", url: (q) => google(q + " site:letras.com") },
+  { name: "Musixmatch", host: "musixmatch.com", home: "https://www.musixmatch.com/es", url: (q) => google(q + " site:musixmatch.com") },
+  { name: "Musica.com", host: "musica.com", home: "https://www.musica.com/", url: (q) => `https://www.musica.com/letras.asp?q=${enc(q)}` },
+  { name: "Genius", host: "genius.com", home: "https://genius.com/", url: (q) => `https://genius.com/search?q=${enc(q)}` },
+  { name: "LaCuerda", host: "lacuerda.net", home: "https://acordes.lacuerda.net/", url: (q) => `https://acordes.lacuerda.net/busca.php?exp=${enc(q)}` },
+  { name: "Cifra Club", host: "cifraclub.com", home: "https://www.cifraclub.com/", url: (q) => google(q + " site:cifraclub.com") },
+  { name: "YouTube", host: "youtube.com", home: "https://www.youtube.com/", url: (q) => `https://www.youtube.com/results?search_query=${enc(q + " letra")}` },
+  { name: "Hymnary (himnos)", host: "hymnary.org", home: "https://hymnary.org/", url: (q) => `https://hymnary.org/search?qu=${enc(q)}` }
+]
+function siteLinks(q) {
+  return SITES.map((s) => h("a", { class: "btn btn-sm", href: q ? s.url(q) : s.home, target: "_blank", rel: "noopener", text: s.name + " ↗" }))
 }
 
-/** Trae la letra de un enlace de Musixmatch. El token solo se envía a api.apify.com, en la cabecera. */
-async function fetchMusixmatch(url) {
-  if (!settings.apifyToken) throw new Error("notoken")
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 120000)
-  let r
-  try {
-    r = await fetch(`https://api.apify.com/v2/acts/${MXM_ACTOR}/run-sync-get-dataset-items?timeout=90&maxTotalChargeUsd=0.01&clean=1`, {
-      method: "POST",
-      signal: ctrl.signal,
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + settings.apifyToken },
-      body: JSON.stringify({ songs: [String(url).trim()] })
-    })
-  } catch (e) {
-    throw new Error(e.name === "AbortError" ? "timeout" : "offline")
-  } finally { clearTimeout(timer) }
-  if (!r.ok) {
-    let detail = ""
-    try { detail = (await r.json())?.error?.message || "" } catch {}
-    const code = { 401: "badtoken", 402: "nocredit", 403: "forbidden", 408: "timeout" }[r.status]
-    throw new Error(code || `Apify respondió ${r.status}${detail ? ": " + detail : ""}`)
+/* ---------- Enlaces de páginas de letras ---------- */
+const isUrl = (s) => /^https?:\/\/\S+$/i.test(String(s || "").trim())
+const deslug = (s) => { let t = String(s || ""); try { t = decodeURIComponent(t) } catch {} return t.replace(/[-_+]+/g, " ").replace(/\s+/g, " ").trim() }
+const titleCase = (s) => String(s || "").replace(/(^|\s)(\p{Ll})/gu, (m, p, c) => p + c.toLocaleUpperCase("es"))
+const mainArtist = (a) => String(a || "").replace(/\s+(feat\.?|ft\.?|featuring)\s.*$/i, "").trim()
+
+/**
+ * Lee título y artista de la dirección de una página de letras (sin descargar la página:
+ * esos sitios no dejan que otra página web lea su contenido).
+ */
+function songFromUrl(raw) {
+  let u
+  try { u = new URL(String(raw).trim()) } catch { return null }
+  const host = u.hostname.replace(/^www\./, "").toLowerCase()
+  const parts = u.pathname.split("/").filter(Boolean)
+  const site = SITES.find((s) => host === s.host || host.endsWith("." + s.host))?.name || (/letras\.mus\.br$/.test(host) ? "Letras.com" : host)
+  let title = "", artist = "", query = "", letrasPath = ""
+  if (/musixmatch\.com$/.test(host)) {
+    // /es/letras/Artista/Titulo · /lyrics/Artist/Title
+    const i = parts.findIndex((p) => /^(lyrics|letras?|testo|paroles|songtext|liedtext)$/i.test(p))
+    if (i > -1 && parts[i + 2]) { artist = deslug(parts[i + 1]).replace(/\s+feat\s+/i, " feat. "); title = deslug(parts[i + 2]) }
+  } else if (/(letras\.com|letras\.mus\.br|cifraclub\.com(\.br)?|lacuerda\.net)$/.test(host)) {
+    // /artista/cancion/ (en LaCuerda: /artista/cancion.shtml)
+    if (parts.length >= 2 && !/^\d+$/.test(parts[1])) {
+      artist = titleCase(deslug(parts[0]))
+      title = titleCase(deslug(parts[1].replace(/\.s?html?$/i, "").replace(/-\d+$/, "")))
+      if (/letras/.test(host)) letrasPath = `/${parts[0]}/${parts[1]}/`.toLowerCase()
+    }
+  } else if (/genius\.com$/.test(host) && parts[0]) {
+    query = deslug(parts[0].replace(/-(lyrics|annotated)$/i, "")) // "Artista-titulo-lyrics": no se puede separar
   }
-  const items = await r.json()
-  const it = Array.isArray(items) ? items[0] : null
-  if (!it) throw new Error("notfound")
-  const ly = it.lyrics || {}
-  const text = Array.isArray(ly.stanzas) && ly.stanzas.length ? ly.stanzas.map((s) => (Array.isArray(s) ? s.join("\n") : String(s))).join("\n\n") : ly.text || ""
-  if (!text.trim()) throw new Error("nolyrics")
-  return { name: it.name || "", artist: it.artist?.name || "", lyrics: text, copyright: ly.copyright || "" }
+  return { url: u.href, site, title, artist, query: query || [title, mainArtist(artist)].join(" ").trim(), letrasPath }
+}
+
+/* ---------- Limpieza de letras copiadas de páginas web ---------- */
+// líneas de la página que no son letra: botones, avisos, contadores, tablaturas…
+const NOISE = [
+  /^(letra|letras|lyrics?)\s*:?$/i,
+  /^\d*\s*contributors?$/i, /^translations?$/i, /^traducci[oó]n(es)?$/i,
+  /^(you might also like|\d*\s*embed)$/i, /^see .{1,60} live$/i, /^get tickets as low as/i,
+  /^(english|español|espanol|português|portugues|français|francais|deutsch|italiano|русский|日本語|한국어|中文|türkçe|polski|nederlands)$/i,
+  /^(compartir|share|imprimir|print|corregir( la)?( letra)?|enviar( letra)?|favoritos?|a[ñn]adir a favoritos|guardar|ver m[aá]s|mostrar (m[aá]s|menos)|leer m[aá]s|comentarios?|publicidad|anuncio|escuchar|reproducir|play|ver v[ií]deo|v[ií]deo|traducir|ver traducci[oó]n|copiar( letra)?|descargar|denunciar|reportar|editar( letra)?|seguir|follow)$/i,
+  /^(mejorar|sincronizar|agregar|a[ñn]adir|editar|corregir)\s+(la\s+)?(letra|traducci[oó]n|significado)/i,
+  /^((lyrics|letra)\s+)?(powered by|proporcionada por|cortes[ií]a de)\b/i,
+  /^(última actualización|ultima actualizacion|last updated|actualizad[oa] el)\b/i,
+  /^(enviad[oa]|revisad[oa]|subtitulad[oa]|legendad[oa]|traducid[oa]|transcrit[oa]|revisões|revisiones)\s+(por|de)\b/i,
+  /^(esta|essa) informa[cç](i[oó]n|[aã]o) est[aá] (mal|equivocada|errada)/i,
+  /^(tono|tom|tonalidad|key|capo|cejilla|afinaci[oó]n|afina[cç][aã]o|tuning|bpm|tempo)\s*[:=]/i,
+  /^(acordes|cifra|tablatura|tabs?|simplificar cifra|auto ?rolagem|auto ?scroll|transponer|transportar|afinador)$/i,
+  /^[eBGDAEbgdae]\s*\|[-\d|hpbrsx/\\~ ]*\|?\s*$/,          // tablaturas
+  /^[#@][\p{L}\d_.]+(\s+[#@][\p{L}\d_.]+)*$/iu,            // solo hashtags o @usuarios
+  /^(suscr[ií]bete|s[ií]guenos|follow us|subscribe|ded[ií]cala)\b/i,
+  /^\d[\d.,]*\s*(k|mil|m)?\s*(vistas|views|visualizaciones|reproducciones|me gusta|likes|comentarios)$/i,
+  /^[-–—_=*·•~.]{3,}$/,                                     // separadores
+  /^\d{1,2}[.)]?$/                                          // número de estrofa suelto
+]
+const URL_IN = /(https?:\/\/|www\.)\S+/i
+// "Writer(s): A, B" · "Composición: A / B" · "Letra y música: A"
+const CREDIT = /^(?:writer\(s\)|writers?|escritor(?:\(es\)|es)?|compositor(?:\(es\)|es)?|composici[oó]n|composi[cç][aã]o|autor(?:\(es\)|es)?|letra y m[uú]sica|m[uú]sica y letra|songwriters?|words and music)\s*[:\-–]\s*(.+)$/i
+// "Escrita por A y B" · "Written by A"
+const CREDIT_BY = /^(?:escrit[oa]s?(?:\(s\))?|compuest[oa]s?|written|words and music)\s+(?:por|by)\s*:?\s*(.+)$/i
+// "Créditos" / "Escritores" solos: lo que sigue (hasta una línea en blanco) son nombres
+const CREDIT_HEAD = /^(cr[eé]ditos|credits|escritores|writers|compositores|songwriters?)\s*:?$/i
+const COPYRIGHT = /©|℗|^\(c\)\s*\d{4}|^copyright\b|^ccli\b/i
+
+/**
+ * Quita de un texto copiado de una página todo lo que no es letra.
+ * Devuelve el texto limpio y lo que se apartó (créditos, copyright, líneas quitadas).
+ */
+function cleanPasted(raw, { title = "", artist = "", stripChords = true } = {}) {
+  const lines = String(raw || "").replace(/\r\n?/g, "\n").replace(/ /g, " ").replace(/[​﻿]/g, "").split("\n")
+  const out = [], removed = [], authors = [], copy = []
+  let chords = 0
+  let foundTitle = "", foundArtist = "", creditsUntilBlank = false, seenLyric = false
+  const known = new Set([norm(title), norm(artist)].filter(Boolean))
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/[ \t]+/g, " ").trim()
+    if (!line) { creditsUntilBlank = false; out.push(""); continue }
+    const drop = () => removed.push(line)
+    if (creditsUntilBlank) { authors.push(line); drop(); continue }
+    // encabezado de la página: «Título Lyrics» (Genius), «Letra de Título»
+    if (!seenLyric) {
+      const g = line.match(/^(.+?)\s+lyrics$/i)
+      if (g) { foundTitle ||= g[1].replace(/^["“«]|["”»]$/g, ""); drop(); continue }
+      const l = line.match(/^letra de\s+["“«']?(.+?)["”»']?(?:\s+(?:de|-)\s+(.+))?$/i)
+      if (l) { foundTitle ||= l[1]; foundArtist ||= l[2] || ""; drop(); continue }
+      // título de un video: «Artista - Canción (Video Oficial)»
+      if (/[\(\[](video|v[ií]deo|official|oficial|lyric|letra|en vivo|live|audio)[^\)\]]*[\)\]]\s*$/i.test(line)) { drop(); continue }
+    }
+    if (COPYRIGHT.test(line)) { copy.push(line); drop(); continue }
+    const c = line.match(CREDIT) || line.match(CREDIT_BY)
+    if (c && line.length < 160) { authors.push(c[1]); drop(); continue }
+    if (CREDIT_HEAD.test(line)) { creditsUntilBlank = true; drop(); continue }
+    if (URL_IN.test(line) && line.length < 160) { drop(); continue }
+    const bare = line.replace(/^[¿¡"“«(]+/, "")
+    if (NOISE.some((re) => re.test(bare))) { drop(); continue }
+    if (stripChords && isChordLine(line)) { chords++; continue }
+    const ih = line.match(INLINE_HEADER) // "Intro: G D Em C"
+    if (ih && matchLabel(ih[1]) && isChordLine(ih[2])) { chords++; continue }
+    // "[Hablado: Pastor]" y similares que no son grupos de FreeShow
+    if (/^\[[^\]]*:[^\]]*\]$/.test(line) && !parseHeader(line)) { drop(); continue }
+    // "1. Señor mi Dios…" (himnarios): el número marca una estrofa nueva
+    const prevBlank = !out.length || out[out.length - 1] === ""
+    const num = prevBlank && line.match(/^\d{1,2}[.)]\s+(?=\S)/)
+    if (num) out.push("", "Verso", line.slice(num[0].length))
+    else out.push(line)
+    seenLyric = true
+  }
+  // primer bloque que solo es el encabezado de la página: título y/o artista
+  const firstEnd = out.findIndex((l, i) => l === "" && out.slice(0, i).some(Boolean))
+  const head = out.slice(0, firstEnd < 0 ? out.length : firstEnd).filter(Boolean)
+  const rest = firstEnd < 0 ? [] : out.slice(firstEnd).filter(Boolean)
+  // «Dios Incomparable» / «Generación 12»: cada palabra con mayúscula y sin puntuación final
+  const titleLike = (l) => {
+    const words = l.split(/\s+/).filter((w) => /^\p{L}{4,}/u.test(w))
+    return l.length <= 50 && words.length > 0 && words.every((w) => /^\p{Lu}/u.test(w)) && !/[.,;:!?]$|:/.test(l) && l !== l.toLocaleUpperCase("es")
+  }
+  const restTitleLike = rest.filter(titleLike).length / Math.max(rest.length, 1)
+  const isKnown = (l) => known.has(norm(l))
+  const isHeader = head.length > 0 && head.length <= 2 && rest.length >= 4 && norm(head[0]) !== norm(head[1] || "") &&
+    head.every((l) => isKnown(l) || (titleLike(l) && restTitleLike < 0.3)) &&
+    (head.some(isKnown) || !rest.some((l) => norm(l) === norm(head[head.length - 1])))
+  if (isHeader) {
+    foundTitle ||= head[0]
+    if (head[1]) foundArtist ||= head[1]
+    removed.push(...head)
+    out.splice(0, firstEnd)
+  }
+  const uniq = (a) => [...new Set(a.map((s) => s.replace(/[\s.;,]+$/, "").trim()).filter(Boolean))]
+  return {
+    text: out.join("\n").replace(/\n{3,}/g, "\n\n").trim(),
+    removed,
+    chords,
+    title: foundTitle.trim(),
+    artist: foundArtist.trim(),
+    author: uniq(authors).join("; "),
+    copyright: uniq(copy).join(" ")
+  }
 }
 
 /** Intenta conseguir la letra de un resultado de Letras.com en LRCLIB. */
@@ -971,12 +1098,8 @@ let searchSeq = 0
 async function runSearch(q) {
   q = q.trim()
   if (!q) return
-  // un enlace de Musixmatch pegado en el buscador: traer esa letra directamente
-  if (isMusixmatchUrl(q)) {
-    selectTab("paste")
-    $("#mxm-url").value = q
-    return loadFromMusixmatch(q)
-  }
+  // un enlace de una página de letras pegado en el buscador
+  if (isUrl(q)) { $("#q").value = ""; return openFromUrl(q) }
   const seq = ++searchSeq
   const box = $("#results")
   box.replaceChildren(h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("div", { class: "skeleton" }))
@@ -1055,17 +1178,10 @@ function libraryGroup(items) {
 
 /* ---------- Búsqueda en la web (se abre en otra pestaña) ---------- */
 function webGroup(q) {
-  const links = [
-    ["Google", `https://www.google.com/search?q=${enc(q + " letra")}`],
-    ["Letras.com", `https://www.google.com/search?q=${enc(q + " site:letras.com")}`],
-    ["Musica.com", `https://www.google.com/search?q=${enc(q + " letra site:musica.com")}`],
-    ["Musixmatch", `https://www.google.com/search?q=${enc(q + " site:musixmatch.com")}`],
-    ["Hymnary (himnos)", `https://hymnary.org/search?qu=${enc(q)}`]
-  ]
   return h("div", { class: "result-group" },
     h("h3", {}, h("span", { text: "Buscar en la web" })),
-    h("div", { class: "web-links" }, links.map(([label, href]) => h("a", { class: "btn btn-sm", href, target: "_blank", rel: "noopener", text: label + " ↗" }))),
-    h("p", { class: "note", text: "Se abre en otra pestaña: copia la letra y pégala en «Pegar letra»." }))
+    h("div", { class: "web-links" }, siteLinks(q)),
+    h("p", { class: "note", text: `Se abre en otra pestaña. Copia la letra, vuelve aquí y pulsa ${PASTE_KEY}: se ordena sola.` }))
 }
 
 function resultGroup(title, items, err) {
@@ -1107,7 +1223,7 @@ async function pickResult(it, btn) {
   checkDuplicate()
   msg.replaceChildren(h("div", { class: "callout warn", style: { marginBottom: "12px" } },
     h("p", {}, h("b", { text: "Esta letra no se puede traer automáticamente." })),
-    h("p", { text: "Ábrela en Letras.com, copia la letra completa y pégala en la pestaña «Pegar letra». El nombre y el artista ya quedaron listos." }),
+    h("p", { text: `Ábrela en Letras.com, copia la letra completa, vuelve aquí y pulsa ${PASTE_KEY}: se ordena sola. El nombre y el artista ya quedaron listos.` }),
     h("div", { class: "actions" },
       h("a", { class: "btn btn-sm btn-primary", href: it.url, target: "_blank", rel: "noopener", text: "Abrir en Letras.com ↗" }),
       h("button", { class: "btn btn-sm", type: "button", onclick: () => { selectTab("paste"); $("#paste").focus() }, text: "Ir a «Pegar letra»" })
@@ -1115,12 +1231,106 @@ async function pickResult(it, btn) {
   ))
 }
 
+/* ---------- Enlace pegado: preparar nombre y artista, y buscar la letra en LRCLIB ---------- */
+async function openFromUrl(url) {
+  const info = songFromUrl(url)
+  if (!info) return
+  selectTab("paste")
+  document.querySelectorAll(".result[aria-current]").forEach((b) => b.removeAttribute("aria-current"))
+  const token = {}
+  state.selectedResult = token
+  state.blocks = []; state.author = ""; state.copyright = ""
+  $("#paste").value = ""
+  $("#paste-note").textContent = ""
+  $("#log").replaceChildren()
+  if (info.title) { $("#f-name").value = info.title; $("#f-artist").value = info.artist; state.metaSource = "prefill" }
+  else if (state.metaSource !== "user") { $("#f-name").value = ""; $("#f-artist").value = "" }
+  renderBlocks()
+  renderPasteSites()
+  const msg = $("#lookup-msg")
+  const openBtn = () => h("a", { class: "btn btn-sm btn-primary", href: info.url, target: "_blank", rel: "noopener", text: `Abrir en ${info.site} ↗` })
+  const label = info.title ? `«${info.title}»${info.artist ? " — " + info.artist : ""}` : ""
+
+  if (info.title && info.artist) {
+    msg.replaceChildren(h("div", { class: "callout", style: { marginBottom: "12px" }, text: `Buscando ${label} en la base abierta…` }))
+    // Letras.com: nombres exactos (con tildes) desde su propio buscador
+    if (info.letrasPath) {
+      try {
+        const hit = (await searchLetras(info.query)).find((d) => new URL(d.url).pathname.toLowerCase() === info.letrasPath)
+        if (hit && state.selectedResult === token) { info.title = hit.title.trim(); info.artist = hit.artist.trim(); $("#f-name").value = info.title; $("#f-artist").value = info.artist }
+      } catch {}
+    }
+    const lyrics = await lrclibLookup(mainArtist(info.artist), info.title)
+    if (state.selectedResult !== token) return
+    if (lyrics) {
+      loadSong({ name: $("#f-name").value, artist: $("#f-artist").value, lyrics })
+      state.metaSource = "prefill" // si luego pega la letra de la página, se conservan
+      msg.replaceChildren(h("div", { class: "callout ok", style: { marginBottom: "12px" } },
+        h("p", { text: "Esta letra estaba en LRCLIB y ya quedó ordenada. Compárala con la página por si hay alguna diferencia." }),
+        h("div", { class: "actions" }, openBtn())))
+      return
+    }
+  }
+  checkDuplicate()
+  renderPasteSites()
+  msg.replaceChildren(h("div", { class: "callout warn", style: { marginBottom: "12px" } },
+    h("p", {}, h("b", { text: `Enlace de ${info.site}` }), label ? ": " + label : ""),
+    h("p", { text: `Las páginas de letras no dejan que otra página lea su contenido. Abre la página, copia la letra completa, vuelve aquí y pulsa ${PASTE_KEY}: se limpia y se ordena sola.` }),
+    h("div", { class: "actions" }, openBtn())))
+}
+
+/* ---------- Letra pegada: limpiar y ordenar ---------- */
+function organizePasted(raw) {
+  const txt = String(raw || "")
+  if (!txt.trim()) return
+  if (isUrl(txt.trim())) return openFromUrl(txt.trim())
+  selectTab("paste")
+  $("#paste").value = txt
+  document.querySelectorAll(".result[aria-current]").forEach((b) => b.removeAttribute("aria-current"))
+  state.selectedResult = null
+  // si nombre/artista eran de la canción anterior, no arrastrarlos a esta
+  if (state.metaSource === "loaded" || state.metaSource === "guess") { $("#f-name").value = ""; $("#f-artist").value = "" }
+  const c = cleanPasted(txt, { title: $("#f-name").value, artist: $("#f-artist").value, stripChords: settings.stripChords })
+  if (!$("#f-name").value.trim() && c.title) { $("#f-name").value = c.title; state.metaSource = "prefill" }
+  if (!$("#f-artist").value.trim() && c.artist) $("#f-artist").value = c.artist
+  if (!c.text) { pasteNote("err", "No quedó texto de letra después de limpiar lo pegado. Revisa que copiaste la letra."); return }
+  loadSong({ name: null, artist: null, lyrics: c.text, author: c.author, copyright: c.copyright })
+
+  const groups = state.blocks.length
+  const parts = [`✓ Letra ordenada en ${groups} ${groups === 1 ? "bloque" : "bloques"}.`]
+  const quit = [c.removed.length && (c.removed.length === 1 ? "1 línea que no era letra" : `${c.removed.length} líneas que no eran letra`),
+    c.chords && (c.chords === 1 ? "1 línea de acordes" : `${c.chords} líneas de acordes`)].filter(Boolean)
+  if (quit.length) parts.push(`Se ${c.removed.length + c.chords === 1 ? "quitó" : "quitaron"} ${quit.join(" y ")}.`)
+  if (c.author) parts.push(`Autores: ${c.author}.`)
+  if (c.copyright) parts.push(`Copyright guardado.`)
+  pasteNote("ok", parts.join(" "), c.removed)
+}
+
+function pasteNote(kind, text, removed = []) {
+  const n = $("#paste-note")
+  n.className = "note" + (kind ? " " + kind : "")
+  n.style.color = kind === "err" ? "var(--err)" : kind === "ok" ? "var(--ok)" : ""
+  n.replaceChildren(text)
+  if (removed.length) {
+    n.append(h("details", { class: "cleaned" }, h("summary", { text: "Ver lo que se quitó" }), h("ul", {}, removed.map((l) => h("li", { text: l })))))
+  }
+}
+
+function currentQuery() {
+  const name = $("#f-name").value.trim()
+  if (name) return [name, mainArtist($("#f-artist").value)].join(" ").trim()
+  const q = $("#q").value.trim()
+  return isUrl(q) ? "" : q
+}
+function renderPasteSites() { $("#paste-sites").replaceChildren(...siteLinks(currentQuery())) }
+
 /* =========================================================================
    UI: editor de bloques
    ========================================================================= */
-function loadSong({ name, artist, lyrics, copyright = "" }) {
+function loadSong({ name, artist, lyrics, author = "", copyright = "" }) {
   if (name != null) { $("#f-name").value = name; state.metaSource = "loaded" }
   if (artist != null) $("#f-artist").value = artist
+  state.author = author
   state.copyright = copyright
   state.blocks = parseLyrics(lyrics, { title: $("#f-name").value })
   // sin nombre: proponer la primera línea (como hace FreeShow)
@@ -1129,12 +1339,13 @@ function loadSong({ name, artist, lyrics, copyright = "" }) {
     let guess = cleanLine(first, { ...settings, capitalize: true }).replace(/[,.;:!?¡¿]+$/g, "").trim()
     if (guess.length > 40) guess = guess.slice(0, guess.lastIndexOf(" ", 40) > 15 ? guess.lastIndexOf(" ", 40) : 40)
     $("#f-name").value = guess
-    state.metaSource = "prefill"
+    state.metaSource = "guess"
   }
   $("#lookup-msg").replaceChildren()
   $("#log").replaceChildren()
   renderBlocks()
   checkDuplicate()
+  renderPasteSites()
 }
 
 function groupSelect(block) {
@@ -1151,7 +1362,7 @@ function renderBlocks() {
   if (!state.blocks.length) {
     box.replaceChildren(h("div", { class: "editor-empty" },
       h("h3", { text: "Aún no hay letra" }),
-      h("p", { text: "Elige un resultado o pega una letra. Aquí podrás marcar cada estrofa como Verso, Coro, Puente… igual que en FreeShow. Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo." })))
+      h("p", {}, "Elige un resultado, o copia una letra en cualquier página y pulsa ", h("kbd", { class: "kbd", text: PASTE_KEY }), " aquí. Se ordena sola en Verso, Coro, Puente… igual que en FreeShow, y puedes cambiar cada bloque. Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo.")))
     renderPreview()
     return
   }
@@ -1185,7 +1396,7 @@ let previewTimer = null
 function renderPreviewSoon() { clearTimeout(previewTimer); previewTimer = setTimeout(renderPreview, 150) }
 
 function currentSong() {
-  return { name: $("#f-name").value.trim(), artist: $("#f-artist").value.trim(), copyright: state.copyright || "", blocks: state.blocks }
+  return { name: $("#f-name").value.trim(), artist: $("#f-artist").value.trim(), author: state.author || "", copyright: state.copyright || "", blocks: state.blocks }
 }
 
 function renderPreview() {
@@ -1344,9 +1555,11 @@ async function createInFreeShow() {
 
 function resetForNext() {
   state.blocks = []
+  state.author = ""
   state.copyright = ""
-  $("#mxm-url").value = ""
-  resetMxmNote()
+  state.metaSource = null
+  $("#paste").value = ""
+  $("#paste-note").textContent = ""
   $("#f-name").value = ""
   $("#f-artist").value = ""
   $("#log").replaceChildren()
@@ -1366,6 +1579,7 @@ function selectTab(which) {
   $("#tab-paste").setAttribute("aria-selected", String(!s))
   $("#pane-search").hidden = !s
   $("#pane-paste").hidden = s
+  if (!s) renderPasteSites()
 }
 $("#tab-search").addEventListener("click", () => selectTab("search"))
 $("#tab-paste").addEventListener("click", () => selectTab("paste"))
@@ -1374,46 +1588,48 @@ $("#search-form").addEventListener("submit", (e) => { e.preventDefault(); runSea
 $("#btn-use-paste").addEventListener("click", () => {
   const txt = $("#paste").value
   if (!txt.trim()) return $("#paste").focus()
-  document.querySelectorAll(".result[aria-current]").forEach((b) => b.removeAttribute("aria-current"))
-  state.selectedResult = null
-  // si nombre/artista eran de la canción anterior, no arrastrarlos a esta
-  if (state.metaSource === "loaded") { $("#f-name").value = ""; $("#f-artist").value = "" }
-  loadSong({ name: null, artist: null, lyrics: txt })
+  organizePasted(txt)
 })
-$("#btn-clear-paste").addEventListener("click", () => { $("#paste").value = ""; $("#paste").focus() })
-
-// Musixmatch (enlace)
-function mxmNote(kind, text) { const n = $("#mxm-note"); n.className = "note" + (kind ? " " + kind : ""); n.textContent = text }
-function resetMxmNote() {
-  mxmNote("", settings.apifyToken ? "Busca la canción en musixmatch.com, copia la dirección y pégala aquí." : "Para usar enlaces de Musixmatch, escribe la clave en ⚙ (Configuración).")
-}
-let mxmBusy = false
-async function loadFromMusixmatch(url) {
-  if (mxmBusy) return
-  if (!isMusixmatchUrl(url)) return mxmNote("err", "Eso no parece un enlace de musixmatch.com.")
-  const btn = $('#mxm-form button[type="submit"]')
-  mxmBusy = true
-  btn.disabled = true
-  mxmNote("", "Trayendo la letra desde Musixmatch… (unos segundos)")
+$("#btn-clear-paste").addEventListener("click", () => { $("#paste").value = ""; $("#paste-note").textContent = ""; $("#paste").focus() })
+$("#btn-clipboard").addEventListener("click", async () => {
   try {
-    const song = await fetchMusixmatch(url)
-    document.querySelectorAll(".result[aria-current]").forEach((b) => b.removeAttribute("aria-current"))
-    state.selectedResult = null
-    loadSong(song)
-    mxmNote("ok", `✓ Letra traída: ${song.name}${song.artist ? " — " + song.artist : ""}`)
-  } catch (e) {
-    mxmNote("err", MXM_ERRORS[e.message] || e.message)
-  } finally {
-    mxmBusy = false
-    btn.disabled = false
+    const txt = await navigator.clipboard.readText()
+    if (!txt.trim()) return pasteNote("err", "El portapapeles está vacío: copia primero la letra en la página.")
+    organizePasted(txt)
+  } catch {
+    pasteNote("", `El navegador no dejó leer el portapapeles. Haz clic en el cuadro y pulsa ${PASTE_KEY}.`)
+    $("#paste").focus()
   }
-}
-$("#mxm-form").addEventListener("submit", (e) => { e.preventDefault(); loadFromMusixmatch($("#mxm-url").value) })
-$("#mxm-url").addEventListener("paste", () => setTimeout(() => { if (isMusixmatchUrl($("#mxm-url").value)) loadFromMusixmatch($("#mxm-url").value) }, 0))
+})
+
+// Pegar en cualquier parte de la página: una letra se ordena sola; un enlace prepara la canción.
+document.addEventListener("paste", (e) => {
+  const text = e.clipboardData?.getData("text/plain") || ""
+  if (!text.trim()) return
+  const t = e.target instanceof Element ? e.target : null
+  const lineCount = text.split("\n").filter((l) => l.trim()).length
+  const url = isUrl(text.trim())
+  if (t?.id === "paste") {
+    // cuadro vacío (o todo seleccionado): ordenar enseguida; si no, pegar normal para editar
+    if (t.selectionStart === 0 && t.selectionEnd === t.value.length) { e.preventDefault(); organizePasted(text) }
+    return
+  }
+  if (t?.id === "q") {
+    if (url || lineCount >= 3) { e.preventDefault(); organizePasted(text) }
+    return
+  }
+  if (t?.closest("input, textarea, select, [contenteditable]")) return
+  e.preventDefault()
+  if (url || lineCount >= 2) return organizePasted(text)
+  // una sola línea: es un título, buscarlo
+  selectTab("search")
+  $("#q").value = text.trim()
+  runSearch(text)
+})
 $("#btn-add-block").addEventListener("click", () => { state.blocks.push({ group: "verse", text: "" }); renderBlocks(); const tas = document.querySelectorAll(".block textarea"); tas[tas.length - 1]?.focus() })
 
-$("#f-name").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; checkDuplicate(); renderPreviewSoon() })
-$("#f-artist").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; renderPreviewSoon() })
+$("#f-name").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; checkDuplicate(); renderPreviewSoon(); renderPasteSites() })
+$("#f-artist").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; renderPreviewSoon(); renderPasteSites() })
 $("#f-category").addEventListener("change", (e) => { settings.category = e.target.value; saveSettings() })
 $("#btn-create").addEventListener("click", createInFreeShow)
 $("#btn-copy").addEventListener("click", async () => {
@@ -1444,22 +1660,10 @@ function openSettings(open) {
   $("#btn-settings").setAttribute("aria-expanded", String(open))
   if (!open) return
   for (const k of ["host", "apiPort", "apiPass", "remotePort", "remotePass"]) sForm.elements[k].value = settings[k] ?? ""
-  sForm.elements.mxmKey.value = ""
-  showMxmKeyStatus()
-}
-function showMxmKeyStatus(kind, text) {
-  const st = $("#mxm-key-status")
-  st.className = "note" + (kind ? " " + kind : "")
-  st.replaceChildren()
-  if (text) { st.textContent = text; return }
-  if (settings.apifyToken) {
-    st.append("✓ Musixmatch está activado en este navegador. ",
-      h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => { settings.apifyToken = ""; saveSettings(); showMxmKeyStatus(); resetMxmNote() } }, "Desactivar"))
-  } else st.textContent = "Musixmatch no está activado en este navegador."
 }
 $("#btn-settings").addEventListener("click", () => openSettings($("#settings").hidden))
 $("#btn-settings-close").addEventListener("click", () => openSettings(false))
-sForm.addEventListener("submit", async (e) => {
+sForm.addEventListener("submit", (e) => {
   e.preventDefault()
   const f = sForm.elements
   settings.host = f.host.value.trim() || DEFAULTS.host
@@ -1467,21 +1671,8 @@ sForm.addEventListener("submit", async (e) => {
   settings.apiPass = f.apiPass.value
   settings.remotePort = Number(f.remotePort.value) || DEFAULTS.remotePort
   settings.remotePass = f.remotePass.value
-  const mxmKey = f.mxmKey.value.trim()
-  let keyOk = true
-  if (mxmKey) {
-    if (/^apify_api_/.test(mxmKey)) settings.apifyToken = mxmKey // token propio (uso avanzado)
-    else {
-      showMxmKeyStatus("", "Comprobando la clave…")
-      try { settings.apifyToken = await unlockApifyToken(mxmKey) } catch { keyOk = false }
-    }
-  }
   saveSettings()
-  resetMxmNote()
   startConnection()
-  if (!keyOk) { showMxmKeyStatus("err", "Clave de Musixmatch incorrecta."); return }
-  f.mxmKey.value = ""
-  showMxmKeyStatus()
   openSettings(false)
 })
 $("#btn-retry").addEventListener("click", startConnection)
@@ -1492,7 +1683,7 @@ $("#pill-remote").addEventListener("click", () => openSettings(true))
    Inicio
    ========================================================================= */
 syncOptions()
-resetMxmNote()
+document.querySelectorAll("[data-paste-key]").forEach((k) => (k.textContent = PASTE_KEY))
 renderCategories()
 renderPreview()
 if (typeof io !== "function") {

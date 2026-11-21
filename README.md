@@ -21,12 +21,20 @@ La configuración se guarda solo en ese navegador.
 1. **Buscar**: escribe el título, el artista o el número de himno.
    - Primero aparece lo que **ya está en tu FreeShow**, por título o por número («245», «himno 245»). Al hacer clic se abre en FreeShow sin proyectarse.
    - Los resultados de **LRCLIB** traen la letra completa.
-   - Los de **Letras.com** se intentan completar solos. Si no se puede, aparece un botón para abrir la página: copias la letra y la pegas en «Pegar letra».
-2. **Ordenar**: cada estrofa es un bloque con su grupo.
-   - Los grupos se detectan solos: lo que se repite es Coro, lo nuevo tras el segundo coro es Puente, etc. Se pueden cambiar a mano.
+   - Los de **Letras.com** se intentan completar solos. Si no se puede, aparece un botón para abrir la página.
+   - **Buscar en la web**: botones que abren la búsqueda en Google, Letras.com, Musixmatch, Musica.com, Genius, LaCuerda, Cifra Club, YouTube o Hymnary.
+2. **Copiar y pegar**: en la página de la canción copia la letra, vuelve a la herramienta y pulsa **⌘V** (Ctrl+V en Windows) en cualquier parte. También sirve el botón **Pegar y ordenar**.
+   - Se quita sola la «basura» de la página: créditos, botones, contadores, enlaces, hashtags, acordes y tablaturas. En «Ver lo que se quitó» se puede revisar.
+   - Los autores («Writer(s)», «Composición», «Escrita por») y el © se guardan como metadatos de la canción.
+   - Si la página trae el título y el artista arriba, se usan para el nombre.
+   - **Enlace de la canción**: si pegas la dirección (Musixmatch, Letras.com, Cifra Club, LaCuerda), se preparan el nombre y el artista y se busca la letra en LRCLIB. Si no está, solo queda copiar la letra de la página y pulsar ⌘V.
+3. **Ordenar**: cada estrofa es un bloque con su grupo.
+   - Si la letra trae títulos («Coro», «Verso 2», «[Puente]», «Pre-coro», también en inglés como en Genius), se respetan. Un «Coro» suelto sin texto significa que el coro se repite ahí.
+   - En los himnos, las estrofas numeradas («1.», «2.») son versos. Si el coro aparece una sola vez, se repite después de cada estrofa.
+   - Sin títulos, los grupos se detectan solos: lo que se repite es Coro, lo nuevo tras el segundo coro es Puente, etc. Se pueden cambiar a mano.
    - Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo.
    - Opciones: líneas por diapositiva, quitar acordes, quitar «(x2)/Bis» y mayúscula inicial.
-3. **Crear en FreeShow**: elige la categoría y listo. Si la categoría tiene plantilla, FreeShow la aplica sola.
+4. **Crear en FreeShow**: elige la categoría y listo. Si la categoría tiene plantilla, FreeShow la aplica sola.
 
 ## Cómo funciona
 
@@ -42,16 +50,8 @@ Es un solo archivo (`index.html`) sin dependencias externas: el cliente socket.i
 - Tu biblioteca de FreeShow, por nombre y número de acceso rápido.
 - [LRCLIB](https://lrclib.net): base abierta, sin clave.
 - Buscador de [Letras.com](https://www.letras.com): solo títulos y enlaces.
-- **Buscar en la web**: botones que abren Google, Letras.com, Musica.com, Musixmatch o Hymnary en otra pestaña, para copiar la letra y pegarla.
-- **Musixmatch, pegando el enlace** (opcional). Busca la canción en musixmatch.com, copia la dirección y pégala en «Pegar letra → Enlace de Musixmatch», o directamente en el buscador.
-  - La letra llega por el actor de Apify `omkar-cloud/musixmatch-scraper`.
-  - Se activa una vez por computador escribiendo la **Clave de Musixmatch** en ⚙.
-  - El token de Apify va incluido en la página **cifrado** (AES-256, clave derivada con PBKDF2 de 600.000 iteraciones); sin la clave no sirve.
-  - Para cambiar el token o la clave, usa [`cifrar-token.html`](cifrar-token.html) y reemplaza el texto cifrado (`MXM_VAULT`) en `index.html`.
-  - Recomendado: un token de Apify con permisos limitados (que solo pueda ejecutar ese actor) y un tope de gasto mensual en la cuenta.
-  - Cuesta unos US$0,002 por canción, con un tope de US$0,01 por consulta. Lo que no encuentra no se cobra.
-  - Funciona con el enlace exacto; el buscador del actor no encuentra bien canciones cristianas en español.
+- **Cualquier otra página** (Musixmatch, Letras.com, Musica.com, Genius, LaCuerda, Cifra Club, YouTube, Hymnary…): se abre con los botones de «Buscar en la web», se copia la letra y se pega con ⌘V. La herramienta la limpia y la ordena.
 
-Otros sitios de letras (Genius, Musixmatch, AZLyrics, Musica.com, Hymnary) no permiten que una página web lea su contenido. Integrarlos requeriría un servidor que copie sus páginas, que se rompe cuando cambian su diseño y va contra sus condiciones de uso. Lyrics.ovh sí lo permite, pero no tiene canciones cristianas en español.
+Esos sitios no permiten que otra página web lea su contenido, por eso la letra se copia a mano. Leerlos de forma automática requeriría un servidor o un servicio de pago que copie sus páginas, que se rompe cuando cambian su diseño y va contra sus condiciones de uso. La herramienta no usa ninguna clave ni servicio de pago.
 
 Respeta los derechos de autor y la licencia CCLI de tu iglesia al proyectar letras.
