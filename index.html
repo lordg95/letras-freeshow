@@ -113,7 +113,7 @@ button { cursor: pointer; }
 
 /* ---------- Controls ---------- */
 label.field { display: grid; gap: 5px; font-size: 12.5px; color: var(--muted); }
-input[type="text"], input[type="number"], input[type="password"], input[type="search"], select, textarea {
+input[type="text"], input[type="number"], input[type="password"], input[type="search"], input[type="url"], select, textarea {
   width: 100%;
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -163,6 +163,12 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .result-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-meta { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result-lib { border-left: 3px solid var(--ok); border-radius: 0 8px 8px 0; }
+.mxm { display: grid; gap: 6px; margin-bottom: 4px; }
+.mxm .note { margin: 0; }
+.mxm .note.err { color: var(--err); }
+.mxm .note.ok { color: var(--ok); }
+.divider { display: flex; align-items: center; gap: 10px; margin: 12px 0; color: var(--faint); font-size: 12px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .web-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .web-links .btn { text-decoration: none; }
 .result-snippet { font-size: 12px; color: var(--faint); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -292,6 +298,7 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
       <label class="field">Contraseña API (si tiene)<input type="password" name="apiPass" placeholder="vacía"></label>
       <label class="field">Puerto RemoteShow<input type="number" name="remotePort" min="1" max="65535" placeholder="5510"></label>
       <label class="field">Contraseña RemoteShow<input type="password" name="remotePass" placeholder="vacía"></label>
+      <label class="field">Token de Apify (Musixmatch)<input type="password" name="apifyToken" placeholder="opcional" autocomplete="off"></label>
     </div>
     <div class="settings-actions">
       <button class="btn btn-primary" type="submit">Guardar y reconectar</button>
@@ -302,6 +309,9 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
     En FreeShow abre <b>Configuración → Conexiones</b> y activa <b>API</b> (puerto 5505).
     Para traer los nombres de tus categorías activa también <b>RemoteShow</b> y escribe aquí su contraseña.
     Todo queda guardado solo en este navegador. Si el navegador pide permiso para <b>acceder a dispositivos de la red local</b>, acéptalo: es como esta página habla con FreeShow.
+  </p>
+  <p class="settings-help">
+    <b>Token de Apify</b> (opcional): permite traer letras pegando un enlace de Musixmatch. Cada canción cuesta unos US$0,002 en tu cuenta de Apify; pon un tope de gasto mensual en Apify. El token solo se guarda en este navegador y solo se envía a Apify.
   </p>
 </section>
 
@@ -324,6 +334,15 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
         </div>
       </div>
       <div id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" hidden>
+        <form class="mxm" id="mxm-form">
+          <label class="field" for="mxm-url">Enlace de Musixmatch</label>
+          <div class="search-row">
+            <input type="url" id="mxm-url" placeholder="https://www.musixmatch.com/es/letras/…" autocomplete="off">
+            <button class="btn btn-primary" type="submit">Traer</button>
+          </div>
+          <p class="note" id="mxm-note">Busca la canción en musixmatch.com, copia la dirección y pégala aquí.</p>
+        </form>
+        <div class="divider"><span>o pega la letra</span></div>
         <textarea id="paste" rows="14" placeholder="Pega aquí la letra copiada de cualquier página.&#10;&#10;Si trae títulos como «Coro», «Verso 2» o «Puente», se usan para ordenar las diapositivas."></textarea>
         <div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn btn-primary" id="btn-use-paste" type="button">Ordenar esta letra</button>
@@ -436,7 +455,7 @@ function similarity(a, b) {
    Configuración (solo en este navegador)
    ========================================================================= */
 const DEFAULTS = {
-  host: "localhost", apiPort: 5505, apiPass: "", remotePort: 5510, remotePass: "",
+  host: "localhost", apiPort: 5505, apiPass: "", remotePort: 5510, remotePass: "", apifyToken: "",
   linesPerSlide: 0, stripChords: true, stripRepeats: true, capitalize: true, category: "song"
 }
 const settings = (() => {
@@ -628,6 +647,7 @@ const metaSafe = (s) => String(s || "").replace(/[:=\n\r]/g, " ").replace(/\s+/g
 function buildText(song, opt) {
   const meta = [`Title=${metaSafe(song.name)}`]
   if (song.artist) meta.push(`Artist=${metaSafe(song.artist)}`)
+  if (song.copyright) meta.push(`Copyright=${metaSafe(song.copyright)}`)
   const parts = [meta.join("\n")]
   for (const b of song.blocks) {
     const slides = blockSlides(b, opt)
@@ -666,6 +686,51 @@ async function searchLetras(q) {
     .filter((d) => String(d.id).startsWith("mus"))
     .slice(0, 10)
     .map((d) => ({ source: "letras", title: d.txt, artist: d.art, url: `https://www.letras.com/${d.dns}/${d.url}/` }))
+}
+
+/* ---------- Musixmatch, vía el actor de Apify «omkar-cloud/musixmatch-scraper» ---------- */
+const MXM_ACTOR = "zHLZaC11cGm9whebu"
+const isMusixmatchUrl = (s) => /^https?:\/\/(www\.)?musixmatch\.com\/\S+/i.test(String(s || "").trim())
+const MXM_ERRORS = {
+  notoken: "Falta el token de Apify: pégalo en ⚙ (Configuración).",
+  badtoken: "Apify rechazó el token. Revísalo en ⚙.",
+  nocredit: "Apify no permitió la consulta: sin saldo o con el límite de gasto alcanzado.",
+  forbidden: "El token de Apify no tiene permiso para usar este actor.",
+  notfound: "Musixmatch no encontró esa dirección (no se cobró). Revisa que sea el enlace de la canción.",
+  nolyrics: "Esa ficha de Musixmatch no tiene letra. Prueba con otra versión de la canción.",
+  timeout: "Musixmatch tardó demasiado. Inténtalo de nuevo.",
+  offline: "No hay conexión a internet o Apify no respondió."
+}
+
+/** Trae la letra de un enlace de Musixmatch. El token solo se envía a api.apify.com, en la cabecera. */
+async function fetchMusixmatch(url) {
+  if (!settings.apifyToken) throw new Error("notoken")
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 120000)
+  let r
+  try {
+    r = await fetch(`https://api.apify.com/v2/acts/${MXM_ACTOR}/run-sync-get-dataset-items?timeout=90&maxTotalChargeUsd=0.01&clean=1`, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + settings.apifyToken },
+      body: JSON.stringify({ songs: [String(url).trim()] })
+    })
+  } catch (e) {
+    throw new Error(e.name === "AbortError" ? "timeout" : "offline")
+  } finally { clearTimeout(timer) }
+  if (!r.ok) {
+    let detail = ""
+    try { detail = (await r.json())?.error?.message || "" } catch {}
+    const code = { 401: "badtoken", 402: "nocredit", 403: "forbidden", 408: "timeout" }[r.status]
+    throw new Error(code || `Apify respondió ${r.status}${detail ? ": " + detail : ""}`)
+  }
+  const items = await r.json()
+  const it = Array.isArray(items) ? items[0] : null
+  if (!it) throw new Error("notfound")
+  const ly = it.lyrics || {}
+  const text = Array.isArray(ly.stanzas) && ly.stanzas.length ? ly.stanzas.map((s) => (Array.isArray(s) ? s.join("\n") : String(s))).join("\n\n") : ly.text || ""
+  if (!text.trim()) throw new Error("nolyrics")
+  return { name: it.name || "", artist: it.artist?.name || "", lyrics: text, copyright: ly.copyright || "" }
 }
 
 /** Intenta conseguir la letra de un resultado de Letras.com en LRCLIB. */
@@ -892,6 +957,12 @@ let searchSeq = 0
 async function runSearch(q) {
   q = q.trim()
   if (!q) return
+  // un enlace de Musixmatch pegado en el buscador: traer esa letra directamente
+  if (isMusixmatchUrl(q)) {
+    selectTab("paste")
+    $("#mxm-url").value = q
+    return loadFromMusixmatch(q)
+  }
   const seq = ++searchSeq
   const box = $("#results")
   box.replaceChildren(h("div", { class: "skeleton" }), h("div", { class: "skeleton" }), h("div", { class: "skeleton" }))
@@ -974,6 +1045,7 @@ function webGroup(q) {
     ["Google", `https://www.google.com/search?q=${enc(q + " letra")}`],
     ["Letras.com", `https://www.google.com/search?q=${enc(q + " site:letras.com")}`],
     ["Musica.com", `https://www.google.com/search?q=${enc(q + " letra site:musica.com")}`],
+    ["Musixmatch", `https://www.google.com/search?q=${enc(q + " site:musixmatch.com")}`],
     ["Hymnary (himnos)", `https://hymnary.org/search?qu=${enc(q)}`]
   ]
   return h("div", { class: "result-group" },
@@ -1032,9 +1104,10 @@ async function pickResult(it, btn) {
 /* =========================================================================
    UI: editor de bloques
    ========================================================================= */
-function loadSong({ name, artist, lyrics }) {
+function loadSong({ name, artist, lyrics, copyright = "" }) {
   if (name != null) { $("#f-name").value = name; state.metaSource = "loaded" }
   if (artist != null) $("#f-artist").value = artist
+  state.copyright = copyright
   state.blocks = parseLyrics(lyrics, { title: $("#f-name").value })
   // sin nombre: proponer la primera línea (como hace FreeShow)
   if (!$("#f-name").value.trim()) {
@@ -1098,7 +1171,7 @@ let previewTimer = null
 function renderPreviewSoon() { clearTimeout(previewTimer); previewTimer = setTimeout(renderPreview, 150) }
 
 function currentSong() {
-  return { name: $("#f-name").value.trim(), artist: $("#f-artist").value.trim(), blocks: state.blocks }
+  return { name: $("#f-name").value.trim(), artist: $("#f-artist").value.trim(), copyright: state.copyright || "", blocks: state.blocks }
 }
 
 function renderPreview() {
@@ -1257,6 +1330,9 @@ async function createInFreeShow() {
 
 function resetForNext() {
   state.blocks = []
+  state.copyright = ""
+  $("#mxm-url").value = ""
+  resetMxmNote()
   $("#f-name").value = ""
   $("#f-artist").value = ""
   $("#log").replaceChildren()
@@ -1291,6 +1367,35 @@ $("#btn-use-paste").addEventListener("click", () => {
   loadSong({ name: null, artist: null, lyrics: txt })
 })
 $("#btn-clear-paste").addEventListener("click", () => { $("#paste").value = ""; $("#paste").focus() })
+
+// Musixmatch (enlace)
+function mxmNote(kind, text) { const n = $("#mxm-note"); n.className = "note" + (kind ? " " + kind : ""); n.textContent = text }
+function resetMxmNote() {
+  mxmNote("", settings.apifyToken ? "Busca la canción en musixmatch.com, copia la dirección y pégala aquí." : "Para usar enlaces de Musixmatch, pega tu token de Apify en ⚙ (Configuración).")
+}
+let mxmBusy = false
+async function loadFromMusixmatch(url) {
+  if (mxmBusy) return
+  if (!isMusixmatchUrl(url)) return mxmNote("err", "Eso no parece un enlace de musixmatch.com.")
+  const btn = $('#mxm-form button[type="submit"]')
+  mxmBusy = true
+  btn.disabled = true
+  mxmNote("", "Trayendo la letra desde Musixmatch… (unos segundos)")
+  try {
+    const song = await fetchMusixmatch(url)
+    document.querySelectorAll(".result[aria-current]").forEach((b) => b.removeAttribute("aria-current"))
+    state.selectedResult = null
+    loadSong(song)
+    mxmNote("ok", `✓ Letra traída: ${song.name}${song.artist ? " — " + song.artist : ""}`)
+  } catch (e) {
+    mxmNote("err", MXM_ERRORS[e.message] || e.message)
+  } finally {
+    mxmBusy = false
+    btn.disabled = false
+  }
+}
+$("#mxm-form").addEventListener("submit", (e) => { e.preventDefault(); loadFromMusixmatch($("#mxm-url").value) })
+$("#mxm-url").addEventListener("paste", () => setTimeout(() => { if (isMusixmatchUrl($("#mxm-url").value)) loadFromMusixmatch($("#mxm-url").value) }, 0))
 $("#btn-add-block").addEventListener("click", () => { state.blocks.push({ group: "verse", text: "" }); renderBlocks(); const tas = document.querySelectorAll(".block textarea"); tas[tas.length - 1]?.focus() })
 
 $("#f-name").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; checkDuplicate(); renderPreviewSoon() })
@@ -1323,7 +1428,7 @@ const sForm = $("#settings-form")
 function openSettings(open) {
   $("#settings").hidden = !open
   $("#btn-settings").setAttribute("aria-expanded", String(open))
-  if (open) for (const k of ["host", "apiPort", "apiPass", "remotePort", "remotePass"]) sForm.elements[k].value = settings[k] ?? ""
+  if (open) for (const k of ["host", "apiPort", "apiPass", "remotePort", "remotePass", "apifyToken"]) sForm.elements[k].value = settings[k] ?? ""
 }
 $("#btn-settings").addEventListener("click", () => openSettings($("#settings").hidden))
 $("#btn-settings-close").addEventListener("click", () => openSettings(false))
@@ -1335,8 +1440,10 @@ sForm.addEventListener("submit", (e) => {
   settings.apiPass = f.apiPass.value
   settings.remotePort = Number(f.remotePort.value) || DEFAULTS.remotePort
   settings.remotePass = f.remotePass.value
+  settings.apifyToken = f.apifyToken.value.trim()
   saveSettings()
   openSettings(false)
+  resetMxmNote()
   startConnection()
 })
 $("#btn-retry").addEventListener("click", startConnection)
@@ -1347,6 +1454,7 @@ $("#pill-remote").addEventListener("click", () => openSettings(true))
    Inicio
    ========================================================================= */
 syncOptions()
+resetMxmNote()
 renderCategories()
 renderPreview()
 if (typeof io !== "function") {

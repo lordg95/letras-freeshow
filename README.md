@@ -42,7 +42,12 @@ Es un solo archivo (`index.html`) sin dependencias externas: el cliente socket.i
 - Tu biblioteca de FreeShow, por nombre y número de acceso rápido.
 - [LRCLIB](https://lrclib.net): base abierta, sin clave.
 - Buscador de [Letras.com](https://www.letras.com): solo títulos y enlaces.
-- **Buscar en la web**: botones que abren Google, Letras.com, Musica.com o Hymnary en otra pestaña, para copiar la letra y pegarla.
+- **Buscar en la web**: botones que abren Google, Letras.com, Musica.com, Musixmatch o Hymnary en otra pestaña, para copiar la letra y pegarla.
+- **Musixmatch, pegando el enlace** (opcional). Busca la canción en musixmatch.com, copia la dirección y pégala en «Pegar letra → Enlace de Musixmatch», o directamente en el buscador.
+  - La letra llega por el actor de Apify `omkar-cloud/musixmatch-scraper`.
+  - Necesita un token de Apify en ⚙. Se guarda solo en ese navegador y solo se envía a Apify.
+  - Cuesta unos US$0,002 por canción, con un tope de US$0,01 por consulta. Lo que no encuentra no se cobra.
+  - Funciona con el enlace exacto; el buscador del actor no encuentra bien canciones cristianas en español.
 
 Otros sitios de letras (Genius, Musixmatch, AZLyrics, Musica.com, Hymnary) no permiten que una página web lea su contenido. Integrarlos requeriría un servidor que copie sus páginas, que se rompe cuando cambian su diseño y va contra sus condiciones de uso. Lyrics.ovh sí lo permite, pero no tiene canciones cristianas en español.
 
