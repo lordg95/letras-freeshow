@@ -24,6 +24,7 @@ La configuración se guarda solo en ese navegador.
    - Los de **Letras.com** se intentan completar solos. Si no se puede, aparece un botón para abrir la página.
    - **Buscar en la web**: botones que abren la búsqueda en Google, Letras.com, Musixmatch, Musica.com, Genius, LaCuerda, Cifra Club, YouTube o Hymnary.
 2. **Copiar y pegar**: en la página de la canción copia la letra, vuelve a la herramienta y pulsa **⌘V** (Ctrl+V en Windows) en cualquier parte. También sirve el botón **Pegar y ordenar**.
+   - Se conservan los espacios entre estrofas. Sitios como Musixmatch los dibujan solo como margen y al copiar se pierden: la herramienta los recupera del formato que viaja con lo copiado.
    - Se quita sola la «basura» de la página: créditos, botones, contadores, enlaces, hashtags, acordes y tablaturas. En «Ver lo que se quitó» se puede revisar.
    - Los autores («Writer(s)», «Composición», «Escrita por») y el © se guardan como metadatos de la canción.
    - Si la página trae el título y el artista arriba, se usan para el nombre.

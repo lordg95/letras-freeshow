@@ -921,6 +921,93 @@ function cleanPasted(raw, { title = "", artist = "", stripChords = true } = {}) 
   }
 }
 
+/* Estrofas desde el HTML del portapapeles. Sitios como Musixmatch o Google separan las estrofas
+   solo con márgenes, así que el texto plano copiado llega sin líneas en blanco. El HTML que viaja
+   junto conserva la estructura: cada estrofa es un contenedor distinto. */
+const BLOCK_TAGS = new Set("ADDRESS ARTICLE ASIDE BLOCKQUOTE DD DIV DL DT FIELDSET FIGCAPTION FIGURE FOOTER FORM H1 H2 H3 H4 H5 H6 HEADER HR LI MAIN NAV OL P PRE SECTION TABLE TBODY TD TH THEAD TR UL".split(" "))
+const sameText = (s) => String(s || "").replace(/\s+/g, " ").trim()
+
+/** Líneas del HTML con la estrofa (contenedor) a la que pertenece cada una. */
+function htmlLines(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html") // documento inerte: no ejecuta nada
+  doc.querySelectorAll("script, style, noscript, template, svg, button, select, textarea, input").forEach((e) => e.remove())
+  const lines = []
+  let buf = "", el = null
+  const end = () => { const t = sameText(buf); if (t) lines.push({ text: t, el }); buf = ""; el = null }
+  const blockOf = (n) => { for (let e = n.parentElement; e; e = e.parentElement) if (BLOCK_TAGS.has(e.tagName) || e === doc.body) return e; return doc.body }
+  const visit = (n) => {
+    if (n.nodeType === 3) {
+      const pre = n.parentElement?.closest("pre, [style*='white-space: pre'], [style*='white-space:pre']")
+      ;(pre ? n.data.split("\n") : [n.data]).forEach((part, i) => {
+        if (i) end()
+        if (part.trim() && !el) el = blockOf(n)
+        buf += part
+      })
+      return
+    }
+    if (n.nodeType !== 1) return
+    if (n.tagName === "BR") return end()
+    const block = BLOCK_TAGS.has(n.tagName)
+    if (block) end()
+    for (const c of n.childNodes) visit(c)
+    if (block) end()
+  }
+  visit(doc.body)
+  // Líneas con <br> dentro de un mismo bloque: ese bloque es la estrofa.
+  // Una línea por bloque (Musixmatch): la estrofa es el contenedor que agrupa esas líneas.
+  const perEl = new Map()
+  for (const l of lines) perEl.set(l.el, (perEl.get(l.el) || 0) + 1)
+  for (const l of lines) {
+    if (perEl.get(l.el) > 1) { l.stanza = l.el; continue }
+    let box = l.el
+    while (box.parentElement && box.parentElement !== doc.body && sameText(box.parentElement.textContent) === sameText(box.textContent)) box = box.parentElement
+    l.stanza = box.parentElement || box
+  }
+  return lines
+}
+
+/** Agrega las líneas en blanco entre estrofas que el texto plano perdió al copiar. */
+function restoreStanzaBreaks(plain, html) {
+  const pl = String(plain || "").replace(/\r\n?/g, "\n").split("\n")
+  if (!html) return plain
+  let run = 0, longest = 0
+  for (const l of pl) { run = l.trim() ? run + 1 : 0; longest = Math.max(longest, run) }
+  if (longest < 8) return plain // ya viene separada en estrofas
+  let hl
+  try { hl = htmlLines(html) } catch { return plain }
+  if (hl.length < 2) return plain
+  const out = []
+  let j = 0, prev = -1
+  for (const l of pl) {
+    let f = -1
+    if (l.trim()) {
+      const k = sameText(l)
+      for (let x = j; x < Math.min(hl.length, j + 60); x++) if (hl[x].text === k) { f = x; break }
+      if (f >= 0) j = f + 1
+    }
+    // solo entre dos líneas que en el HTML también son seguidas, y nunca después de un título («Coro»)
+    if (f >= 0 && prev >= 0 && f === prev + 1 && hl[f].stanza !== hl[prev].stanza && out[out.length - 1].trim() && !parseHeader(out[out.length - 1])) out.push("")
+    out.push(l)
+    prev = f
+  }
+  return out.join("\n")
+}
+
+/** Lee el portapapeles (texto y, si se puede, también el HTML). */
+async function readClipboard() {
+  if (navigator.clipboard.read) {
+    try {
+      let plain = "", html = ""
+      for (const it of await navigator.clipboard.read()) {
+        if (!plain && it.types.includes("text/plain")) plain = await (await it.getType("text/plain")).text()
+        if (!html && it.types.includes("text/html")) html = await (await it.getType("text/html")).text()
+      }
+      if (plain) return restoreStanzaBreaks(plain, html)
+    } catch (e) { if (e?.name === "NotAllowedError") throw e }
+  }
+  return navigator.clipboard.readText()
+}
+
 /** Intenta conseguir la letra de un resultado de Letras.com en LRCLIB. */
 async function lrclibLookup(artist, title) {
   try {
@@ -1752,7 +1839,7 @@ $("#btn-use-paste").addEventListener("click", () => {
 $("#btn-clear-paste").addEventListener("click", () => { $("#paste").value = ""; $("#paste-note").textContent = ""; $("#paste").focus() })
 $("#btn-clipboard").addEventListener("click", async () => {
   try {
-    const txt = await navigator.clipboard.readText()
+    const txt = await readClipboard()
     if (!txt.trim()) return pasteNote("err", "El portapapeles está vacío: copia primero la letra en la página.")
     organizePasted(txt)
   } catch {
@@ -1763,20 +1850,24 @@ $("#btn-clipboard").addEventListener("click", async () => {
 
 // Pegar en cualquier parte de la página: una letra se ordena sola; un enlace prepara la canción.
 document.addEventListener("paste", (e) => {
-  const text = e.clipboardData?.getData("text/plain") || ""
-  if (!text.trim()) return
+  const plain = e.clipboardData?.getData("text/plain") || ""
+  if (!plain.trim()) return
+  // recupera las líneas en blanco entre estrofas si el sitio las separaba solo con márgenes
+  const text = restoreStanzaBreaks(plain, e.clipboardData.getData("text/html"))
   const t = e.target instanceof Element ? e.target : null
   const lineCount = text.split("\n").filter((l) => l.trim()).length
   const url = isUrl(text.trim())
   if (t?.id === "paste") {
-    // cuadro vacío (o todo seleccionado): ordenar enseguida; si no, pegar normal para editar
+    // cuadro vacío (o todo seleccionado): ordenar enseguida; si no, pegar para editar
     if (t.selectionStart === 0 && t.selectionEnd === t.value.length) { e.preventDefault(); organizePasted(text) }
+    else if (text !== plain) { e.preventDefault(); document.execCommand("insertText", false, text) }
     return
   }
   if (t?.id === "q") {
     if (url || lineCount >= 3) { e.preventDefault(); organizePasted(text) }
     return
   }
+  if (t?.matches("textarea") && text !== plain) { e.preventDefault(); document.execCommand("insertText", false, text); return }
   if (t?.closest("input, textarea, select, [contenteditable]")) return
   e.preventDefault()
   if (url || lineCount >= 2) return organizePasted(text)
