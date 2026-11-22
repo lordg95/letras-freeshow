@@ -228,6 +228,25 @@ details.cleaned li { overflow-wrap: anywhere; }
 .block textarea:focus { box-shadow: none; }
 .block:focus-within { border-color: var(--line-strong); border-left-color: var(--gc); }
 .add-block { margin-top: 10px; }
+.block-head .add-btn { font-size: 18px; font-weight: 500; }
+.add-wrap { position: relative; display: inline-flex; }
+.block-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+  display: grid; gap: 2px; min-width: 176px; padding: 4px;
+  background: var(--panel-3); border: 1px solid var(--line-strong); border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / .4);
+}
+.block-menu.up { top: auto; bottom: calc(100% + 4px); }
+.block-menu[hidden] { display: none; }
+.block-menu button {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text); font-size: 13.5px; text-align: left; white-space: nowrap;
+}
+.block-menu button span { width: 14px; color: var(--muted); text-align: center; }
+.block-menu button:hover, .block-menu button:focus-visible { background: var(--panel-2); outline: none; }
+.block.is-new { animation: block-in 1.2s ease-out; }
+@keyframes block-in { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: 0 0 0 2px transparent; } }
+.block textarea::placeholder { color: var(--faint); }
 .editor-empty { text-align: center; padding: 48px 20px; color: var(--muted); }
 .editor-empty h3 { color: var(--text); margin: 0 0 6px; font-size: 16px; }
 .editor-empty p { margin: 0 auto; max-width: 380px; }
@@ -282,7 +301,7 @@ details.raw pre { white-space: pre-wrap; background: var(--panel-2); border-radi
   .block-head { gap: 4px; }
   .block-head .count { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .skeleton, .block.is-new { animation: none; } }
 </style>
 <script id="socketio-client">/* socket.io-client 4.8.1 (MIT) */
 /*!
@@ -1405,7 +1424,63 @@ function groupSelect(block) {
 
 function autoSize(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px" }
 
+/* Menú «+» de cada bloque: añadir un bloque nuevo arriba o abajo. */
+let openMenu = null
+function closeBlockMenu(focusButton) {
+  if (!openMenu) return
+  const { btn, menu } = openMenu
+  openMenu = null
+  menu.hidden = true
+  btn.setAttribute("aria-expanded", "false")
+  if (focusButton) btn.focus()
+}
+function toggleBlockMenu(btn, menu) {
+  const wasOpen = openMenu?.menu === menu
+  closeBlockMenu()
+  if (wasOpen) return
+  menu.hidden = false
+  btn.setAttribute("aria-expanded", "true")
+  const r = btn.getBoundingClientRect(), need = menu.offsetHeight + 12
+  menu.classList.toggle("up", innerHeight - r.bottom < need && r.top > need)
+  openMenu = { btn, menu }
+  menu.querySelector("button").focus()
+}
+function blockMenu(i) {
+  const item = (icon, label, at) => h("button", { type: "button", role: "menuitem", onclick: () => insertBlock(at) }, h("span", { "aria-hidden": "true", text: icon }), label)
+  const menu = h("div", { class: "block-menu", role: "menu", hidden: true },
+    item("↥", "Añadir bloque arriba", i),
+    item("↧", "Añadir bloque abajo", i + 1))
+  const btn = h("button", { class: "icon-btn add-btn", type: "button", title: "Añadir bloque", "aria-label": "Añadir bloque arriba o abajo", "aria-haspopup": "menu", "aria-expanded": "false", onclick: () => toggleBlockMenu(btn, menu) }, "+")
+  menu.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return
+    e.preventDefault()
+    const items = [...menu.querySelectorAll("button")]
+    const k = items.indexOf(document.activeElement)
+    items[(k + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus()
+  })
+  // Safari no enfoca botones al hacer clic: evita que el menú se cierre por perder el foco antes del clic
+  menu.addEventListener("mousedown", (e) => e.preventDefault())
+  const wrap = h("span", { class: "add-wrap" }, btn, menu)
+  wrap.addEventListener("focusout", (e) => { if (openMenu?.menu === menu && !wrap.contains(e.relatedTarget)) closeBlockMenu() })
+  return wrap
+}
+document.addEventListener("pointerdown", (e) => { if (openMenu && !openMenu.btn.parentElement.contains(e.target)) closeBlockMenu() })
+document.addEventListener("keydown", (e) => { if (openMenu && e.key === "Escape") { e.preventDefault(); closeBlockMenu(true) } })
+
+function insertBlock(at) {
+  closeBlockMenu()
+  state.blocks.splice(at, 0, { group: "verse", text: "" })
+  renderBlocks()
+  const card = $("#blocks").children[at]
+  if (!card) return
+  card.classList.add("is-new")
+  card.addEventListener("animationend", () => card.classList.remove("is-new"), { once: true })
+  card.querySelector("textarea").focus({ preventScroll: true })
+  card.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+}
+
 function renderBlocks() {
+  openMenu = null
   const box = $("#blocks")
   $("#btn-add-block").hidden = !state.blocks.length
   syncNewButton()
@@ -1420,7 +1495,7 @@ function renderBlocks() {
     const card = h("div", { class: "block", style: { "--gc": GROUP[b.group]?.color } })
     const sel = groupSelect(b)
     const count = h("span", { class: "count" })
-    const ta = h("textarea", { rows: 2, spellcheck: "false", "aria-label": `Texto del bloque ${i + 1}` })
+    const ta = h("textarea", { rows: 2, spellcheck: "false", "aria-label": `Texto del bloque ${i + 1}`, placeholder: "Escribe o pega aquí la letra de este bloque" })
     ta.value = b.text
     const updateCount = () => { const n = blockSlides(b, settings).length; count.textContent = n === 1 ? "1 diapositiva" : `${n} diapositivas` }
     sel.addEventListener("change", () => { b.group = sel.value; card.style.setProperty("--gc", GROUP[b.group].color); renderPreview() })
@@ -1428,6 +1503,7 @@ function renderBlocks() {
     const move = (d) => { const j = i + d; if (j < 0 || j >= state.blocks.length) return; [state.blocks[i], state.blocks[j]] = [state.blocks[j], state.blocks[i]]; renderBlocks() }
     card.append(
       h("div", { class: "block-head" }, h("span", { class: "sw", "aria-hidden": "true" }), sel, count, h("span", { class: "spacer" }),
+        blockMenu(i),
         h("button", { class: "icon-btn", type: "button", title: "Subir", "aria-label": "Subir bloque", onclick: () => move(-1), disabled: i === 0 }, "↑"),
         h("button", { class: "icon-btn", type: "button", title: "Bajar", "aria-label": "Bajar bloque", onclick: () => move(1), disabled: i === state.blocks.length - 1 }, "↓"),
         h("button", { class: "icon-btn", type: "button", title: "Duplicar", "aria-label": "Duplicar bloque", onclick: () => { state.blocks.splice(i + 1, 0, { ...b }); renderBlocks() } }, "⧉"),
@@ -1710,7 +1786,7 @@ document.addEventListener("paste", (e) => {
   syncClearSearch()
   runSearch(text)
 })
-$("#btn-add-block").addEventListener("click", () => { state.blocks.push({ group: "verse", text: "" }); renderBlocks(); const tas = document.querySelectorAll(".block textarea"); tas[tas.length - 1]?.focus() })
+$("#btn-add-block").addEventListener("click", () => insertBlock(state.blocks.length))
 
 $("#f-name").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; checkDuplicate(); renderPreviewSoon(); renderPasteSites(); syncNewButton() })
 $("#f-artist").addEventListener("input", (e) => { if (e.isTrusted) state.metaSource = "user"; renderPreviewSoon(); renderPasteSites() })

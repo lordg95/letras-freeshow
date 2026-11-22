@@ -33,6 +33,7 @@ La configuración se guarda solo en ese navegador.
    - En los himnos, las estrofas numeradas («1.», «2.») son versos. Si el coro aparece una sola vez, se repite después de cada estrofa.
    - Sin títulos, los grupos se detectan solos: lo que se repite es Coro, lo nuevo tras el segundo coro es Puente, etc. Se pueden cambiar a mano.
    - Una línea en blanco dentro de un bloque crea otra diapositiva del mismo grupo.
+   - Cada bloque tiene botones para añadir otro bloque arriba o abajo (**+**), subir, bajar, duplicar o eliminar. Los bloques vacíos no se envían.
    - Opciones: líneas por diapositiva, quitar acordes, quitar «(x2)/Bis» y mayúscula inicial.
 4. **Crear en FreeShow**: elige la categoría y listo. Si la categoría tiene plantilla, FreeShow la aplica sola.
 
